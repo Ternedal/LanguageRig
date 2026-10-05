@@ -123,6 +123,16 @@ CUDA_VISIBLE_DEVICES=0 languagerig fit-probe examples/munin-pilot.json --execute
 languagerig train examples/munin-pilot.json --execute --fit-report data/checks/fit-probe.json
 ~~~
 
+Før første rigtige job kan hele readiness-forløbet køres med én kommando:
+
+~~~powershell
+.\\scripts\\check-pilot-ready.ps1 -Config '.\\data\\pilots\\dansk-pilot\\configs\\dansk-pilot.json' -Gpu 0
+~~~
+
+Den kører doctor og fit-probe i rækkefølge og udskriver et samlet READY-resumé
+med GPU, compute capability, samlet VRAM, minimum observeret fri VRAM,
+modelrevision og sekvenslængde.
+
 Runneren bruger én synlig GPU, 4-bit NF4, LoRA på lineære lag, batch=1,
 gradient accumulation og gradient checkpointing. En eksekverende træningskørsel
 kræver en bestået fit-probe med samme config- og datasæthash; en gammel eller
