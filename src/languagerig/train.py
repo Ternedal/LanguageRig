@@ -100,6 +100,10 @@ def verify_fit_gate(config_path: Path, report_path: Path) -> dict:
         raise LanguageRigError("Fit-probe config differs from the training config.")
     if report.get("dataset_sha256") != plan["dataset_sha256"]:
         raise LanguageRigError("Fit-probe dataset differs from the training dataset.")
+    revision = report.get("resolved_revision")
+    if not isinstance(revision, str) or len(revision) != 40 or any(
+            char not in "0123456789abcdef" for char in revision.lower()):
+        raise LanguageRigError("Fit-probe did not pin a valid model commit revision.")
     return report
 
 
@@ -125,8 +129,8 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         raise LanguageRigError("Select one GPU with CUDA_VISIBLE_DEVICES before training.")
     from datasets import load_dataset
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
-                              BitsAndBytesConfig, Trainer, TrainerCallback, TrainingArguments, set_seed)
+    from transformers import (AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
+                              Trainer, TrainerCallback, TrainingArguments, set_seed)
     config = plan["config"]
     output = Path(config["output_dir"])
     run_path = output / "run.json"
@@ -140,20 +144,20 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         if output.resolve() not in resume.parents or not (resume / "trainer_state.json").is_file():
             raise LanguageRigError("Resume must point to a checkpoint inside the original output directory.")
         revision = previous["resolved_revision"]
+        if revision != fit_gate["resolved_revision"]:
+            raise LanguageRigError("Fit-probe model revision differs from the run being resumed.")
     else:
         if output.exists() and any(output.iterdir()):
             raise LanguageRigError("Run directory is not empty; choose a new output_dir or resume.")
-        resolved = AutoConfig.from_pretrained(config["model_id"], revision=config["model_revision"], trust_remote_code=False)
-        revision = getattr(resolved, "_commit_hash", None)
-        if not revision:
-            raise LanguageRigError("Cannot pin model revision; use a Hugging Face model repository.")
+        revision = fit_gate["resolved_revision"]
     output.mkdir(parents=True, exist_ok=True)
     run = {**plan, "format": "languagerig-run/v1", "status": "running",
            "resolved_revision": revision, "started_at": now(), "training_executed": True,
            "fit_probe": {"report": str(fit_report.resolve()),
                          "completed_at": fit_gate.get("completed_at"),
                          "minimum_observed_free_bytes": fit_gate.get("vram", {}).get("minimum_observed_free_bytes"),
-                         "training_gate": fit_gate.get("training_gate")},
+                         "training_gate": fit_gate.get("training_gate"),
+                         "resolved_revision": fit_gate.get("resolved_revision")},
            "gpu": torch.cuda.get_device_name(0), "quality_improvement": "not_measured",
            "runtime_versions": {name: importlib.metadata.version(name) for name in
                                 ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}}
