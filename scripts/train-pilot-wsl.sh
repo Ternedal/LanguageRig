@@ -34,9 +34,14 @@ if [[ $mode == fit ]]; then
   "$python_exe" -m languagerig fit-probe "$config_path" --execute \
     --report "$workspace_path/checks/fit-probe.json"
 elif [[ $mode == execute ]]; then
+  fit_report="$workspace_path/checks/fit-probe.json"
+  if [[ ! -f $fit_report ]]; then
+    echo "Training blocked: run -FitProbe first; fit-probe report is missing." >&2
+    exit 3
+  fi
   if [[ $resume_path == - ]]; then
-    "$python_exe" -m languagerig train "$config_path" --execute
+    "$python_exe" -m languagerig train "$config_path" --execute --fit-report "$fit_report"
   else
-    "$python_exe" -m languagerig train "$config_path" --execute --resume "$resume_path"
+    "$python_exe" -m languagerig train "$config_path" --execute --fit-report "$fit_report" --resume "$resume_path"
   fi
 fi
