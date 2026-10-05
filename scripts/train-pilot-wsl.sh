@@ -26,7 +26,7 @@ export CUDA_VISIBLE_DEVICES="$gpu_index"
 export HF_HUB_DISABLE_TELEMETRY=1
 export DO_NOT_TRACK=1
 export PYTHONIOENCODING=utf-8
-workspace_path=$("$python_exe" -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve().parent.parent)' "$config_path")
+workspace_path=$("$python_exe" -c 'import json,pathlib,sys; p=pathlib.Path(sys.argv[1]); c=json.loads(p.read_text(encoding="utf-8")); print((p.parent/c["output_dir"]).resolve().parent.parent)' "$config_path")
 report_path="$workspace_path/checks/train-doctor.json"
 "$python_exe" -m languagerig --workspace "$workspace_path" doctor \
   --config "$config_path" --require-training --report "$report_path"

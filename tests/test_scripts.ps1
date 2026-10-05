@@ -60,16 +60,18 @@ for number in range(3):
         if ($global:stubBlock) { $global:LASTEXITCODE = 7 }
     }
     & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -Gpu 1
-    $last = $global:wslCalls[-1]
-    Assert-True ($last.Count -eq 11) 'WSL argument boundaries changed'
-    Assert-True ($last[6] -eq $global:wslConfig) 'WSL config argument was split or altered'
-    Assert-True ($last[7] -eq '1' -and $last[8] -eq 'check') 'Default mode unexpectedly executed'
-    Assert-True ($last[9] -eq '/mnt/c/Language Rig/.venv-wsl/bin/python') 'WSL Python path was altered'
+    # PowerShell consumes the end-of-parameters marker for a function stub;
+    # a native wsl.exe receives it. Compare the remaining data arguments.
+    $last = @($global:wslCalls[-1] | Where-Object { $_ -ne '--' })
+    Assert-True ($last.Count -eq 10) 'WSL argument boundaries changed'
+    Assert-True ($last[5] -eq $global:wslConfig) 'WSL config argument was split or altered'
+    Assert-True ($last[6] -eq '1' -and $last[7] -eq 'check') 'Default mode unexpectedly executed'
+    Assert-True ($last[8] -eq '/mnt/c/Language Rig/.venv-wsl/bin/python') 'WSL Python path was altered'
     $checkpoint = Join-Path $testRoot 'checkpoint with spaces'
     [IO.Directory]::CreateDirectory($checkpoint) | Out-Null
     & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -Execute -Resume $checkpoint
-    $last = $global:wslCalls[-1]
-    Assert-True ($last[8] -eq 'execute' -and $last[10] -eq $global:wslResume) 'Resume arguments were altered'
+    $last = @($global:wslCalls[-1] | Where-Object { $_ -ne '--' })
+    Assert-True ($last[7] -eq 'execute' -and $last[9] -eq $global:wslResume) 'Resume arguments were altered'
     $global:stubBlock = $true
     $failed = $false
     try { & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -Execute }

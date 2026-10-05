@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from languagerig.cli import main
-from languagerig.core import LanguageRigError, books, read_json
+from languagerig.core import LanguageRigError, books, read_json, write_json
 from languagerig.corpus import verify_dataset
 from languagerig.doctor import PROBE_MARKER, dependency_status, doctor, gpu_probe
 from languagerig.ingest import import_books
@@ -240,3 +240,25 @@ else:
             completed, rows = self.run_launcher(**options)
             self.assertEqual(completed.returncode, 2)
             self.assertEqual(rows, [])
+
+    def test_real_blocked_cli_writes_report_to_configured_workspace(self):
+        source = self.root / "books"
+        source.mkdir()
+        for number in range(3):
+            epub(source / f"{number}.epub", f"Bog {number}")
+        workspace = self.root / "actual workspace"
+        pilot = prepare_pilot(workspace, source, "real", training_allowed=True)
+        external = self.root / "elsewhere" / "external.json"
+        configuration = read_json(Path(pilot["config_path"]))
+        configuration.update(dataset="../actual workspace/datasets/real",
+                             output_dir="../actual workspace/runs/real")
+        write_json(external, configuration)
+        completed = subprocess.run(
+            ["bash", str(self.script), str(external), "0", "execute", sys.executable, "-"],
+            env={**os.environ, "WORLD_SIZE": "2"}, capture_output=True, text=True, timeout=10)
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        report = read_json(workspace / "checks/train-doctor.json")
+        self.assertIn("distributed_training_not_supported", report["errors"])
+        self.assertFalse(report["training_executed"])
+        self.assertFalse((workspace / "runs/real").exists())
+        self.assertFalse((self.root / "checks/train-doctor.json").exists())
