@@ -156,7 +156,7 @@ class FitProbeTests(WorkspaceCase):
 
 class TrainingGateTests(WorkspaceCase):
     def fit_report(self, config, *, status="passed", gate="pass", config_hash=None,
-                   dataset_hash=None):
+                   dataset_hash=None, resolved_revision="a" * 40):
         plan = training_plan(config)
         path = self.root / "fit-probe.json"
         write_json(path, {
@@ -165,6 +165,7 @@ class TrainingGateTests(WorkspaceCase):
             "training_gate": gate,
             "config_sha256": config_hash or plan["config_sha256"],
             "dataset_sha256": dataset_hash or plan["dataset_sha256"],
+            "resolved_revision": resolved_revision,
             "vram": {"minimum_observed_free_bytes": 1024 * 1024 * 1024},
         })
         return path
@@ -174,12 +175,15 @@ class TrainingGateTests(WorkspaceCase):
         report = self.fit_report(config)
         result = verify_fit_gate(config, report)
         self.assertEqual(result["training_gate"], "pass")
+        self.assertEqual(result["resolved_revision"], "a" * 40)
 
         for kwargs in (
             {"status": "failed", "gate": "blocked"},
             {"status": "passed", "gate": "review"},
             {"config_hash": "stale-config"},
             {"dataset_hash": "stale-dataset"},
+            {"resolved_revision": ""},
+            {"resolved_revision": "not-a-commit"},
         ):
             report = self.fit_report(config, **kwargs)
             with self.assertRaises(LanguageRigError):
