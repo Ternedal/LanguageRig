@@ -106,7 +106,7 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
     from datasets import load_dataset
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
-                              BitsAndBytesConfig, Trainer, TrainerCallback, TrainingArguments)
+                              BitsAndBytesConfig, Trainer, TrainerCallback, TrainingArguments, set_seed)
     config = plan["config"]
     output = Path(config["output_dir"])
     run_path = output / "run.json"
@@ -133,8 +133,11 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
            "gpu": torch.cuda.get_device_name(0), "quality_improvement": "not_measured",
            "runtime_versions": {name: importlib.metadata.version(name) for name in
                                 ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}}
+    # Loading may reuse the local cache; network download activity is not tracked.
+    run.update(model_downloaded=None, model_load_status="not_started")
     write_json(run_path, run)
     try:
+        set_seed(config["seed"])
         tokenizer = AutoTokenizer.from_pretrained(config["model_id"], revision=revision, trust_remote_code=False)
         if tokenizer.eos_token_id is None:
             raise LanguageRigError("Tokenizer needs an EOS token.")
@@ -143,12 +146,16 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         tokenizer.padding_side = "right"
         if plan["mode"] == "instruction" and not tokenizer.chat_template:
             raise LanguageRigError("Instruction tuning requires the model's chat template.")
+        run["model_load_status"] = "loading"
+        write_json(run_path, run)
         model = AutoModelForCausalLM.from_pretrained(
             config["model_id"], revision=revision, trust_remote_code=False,
             quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                                                   bnb_4bit_use_double_quant=True,
                                                   bnb_4bit_compute_dtype=torch.float16),
             dtype=torch.float16, device_map={"": 0})
+        run["model_load_status"] = "loaded"
+        write_json(run_path, run)
         model.config.use_cache = False
         model = prepare_model_for_kbit_training(model)
         model = get_peft_model(model, LoraConfig(
@@ -198,6 +205,8 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         write_json(run_path, run)
         return run
     except BaseException as exc:
+        if run["model_load_status"] != "loaded":
+            run["model_load_status"] = "failed"
         run.update(status="failed", ended_at=now(), error_type=type(exc).__name__)
         write_json(run_path, run)
         raise

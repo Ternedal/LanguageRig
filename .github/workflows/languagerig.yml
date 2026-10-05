@@ -14,6 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
@@ -34,3 +35,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Check CLI
         run: languagerig --help
+      - name: Check PowerShell preparation and WSL argument transport
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/test_scripts.ps1

@@ -10,9 +10,11 @@ from pathlib import Path
 
 from .core import LanguageRigError, books, init_workspace, label_book
 from .corpus import build_dataset, verify_dataset
+from .doctor import doctor
 from .evaluate import evaluate
 from .ingest import import_books
 from .integrate import export_rag, merge_adapter, package_model, publish_rag, register_model
+from .pilot import prepare_pilot
 from .train import run_training
 
 
@@ -21,6 +23,21 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--workspace", type=Path, default=Path("data"))
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("init")
+    check = sub.add_parser("doctor")
+    check.add_argument("--config", type=Path)
+    check.add_argument("--gpu", type=int)
+    check.add_argument("--require-training", action="store_true")
+    check.add_argument("--report", type=Path)
+    pilot = sub.add_parser("prepare-pilot")
+    pilot.add_argument("source", type=Path)
+    pilot.add_argument("--name", required=True)
+    pilot.add_argument("--training-allowed", action="store_true")
+    pilot.add_argument("--language")
+    pilot.add_argument("--genre", choices=("unknown", "fiction", "nonfiction"), default="unknown")
+    pilot.add_argument("--topic", action="append", default=[])
+    pilot.add_argument("--model")
+    pilot.add_argument("--revision", default="main")
+    pilot.add_argument("--max-steps", type=int, default=100)
     imp = sub.add_parser("import")
     imp.add_argument("source", type=Path)
     imp.add_argument("--genre", choices=("unknown", "fiction", "nonfiction"), default="unknown")
@@ -83,6 +100,14 @@ def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
         match args.command:
+            case "doctor":
+                result = doctor(args.workspace, config=args.config, gpu=args.gpu,
+                                require_training=args.require_training, report=args.report)
+            case "prepare-pilot":
+                result = prepare_pilot(args.workspace, args.source, args.name,
+                                       training_allowed=args.training_allowed, language=args.language,
+                                       genre=args.genre, topics=args.topic, model_id=args.model,
+                                       model_revision=args.revision, max_steps=args.max_steps)
             case "init":
                 init_workspace(args.workspace)
                 result = {"initialized": str(args.workspace.resolve())}

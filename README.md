@@ -9,6 +9,10 @@ datasæt med opdeling efter værk, en valgfri QLoRA-runner, checkpoint-resume,
 adapter-merge, GGUF-pakning/Ollama-registrering og sammenligning af modelversioner.
 Bogteksten kan også eksporteres til ModelRigs eksisterende RAG-API.
 
+Til første kørsel på riggen findes et samlet
+[Windows/WSL-pilotforløb](docs/PILOT.md): bogimport, datasæt og konfiguration
+med prepare-pilot, lokalt miljøtjek med doctor og eksplicit træningsstart.
+
 Der er endnu ingen grafisk bogvælger, automatisk generering af træningsdialoger
 eller OCR. GPU-træning og kvalitet på virkelige danske bøger skal kvalificeres
 på riggen; syntetiske import- og transporttests dokumenterer ikke modelkvalitet.
