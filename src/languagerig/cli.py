@@ -10,9 +10,12 @@ from pathlib import Path
 
 from .core import LanguageRigError, books, init_workspace, label_book
 from .corpus import build_dataset, verify_dataset
+from .doctor import doctor
 from .evaluate import evaluate
+from .fit import fit_probe
 from .ingest import import_books
 from .integrate import export_rag, merge_adapter, package_model, publish_rag, register_model
+from .pilot import prepare_pilot
 from .train import run_training
 
 
@@ -21,6 +24,26 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--workspace", type=Path, default=Path("data"))
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("init")
+    check = sub.add_parser("doctor")
+    check.add_argument("--config", type=Path)
+    check.add_argument("--gpu", type=int)
+    check.add_argument("--require-training", action="store_true")
+    check.add_argument("--report", type=Path)
+    fit = sub.add_parser("fit-probe")
+    fit.add_argument("config", type=Path)
+    fit.add_argument("--execute", action="store_true",
+                     help="Load the configured model and run one bounded training microstep")
+    fit.add_argument("--report", type=Path)
+    pilot = sub.add_parser("prepare-pilot")
+    pilot.add_argument("source", type=Path)
+    pilot.add_argument("--name", required=True)
+    pilot.add_argument("--training-allowed", action="store_true")
+    pilot.add_argument("--language")
+    pilot.add_argument("--genre", choices=("unknown", "fiction", "nonfiction"), default="unknown")
+    pilot.add_argument("--topic", action="append", default=[])
+    pilot.add_argument("--model")
+    pilot.add_argument("--revision", default="main")
+    pilot.add_argument("--max-steps", type=int, default=100)
     imp = sub.add_parser("import")
     imp.add_argument("source", type=Path)
     imp.add_argument("--genre", choices=("unknown", "fiction", "nonfiction"), default="unknown")
@@ -51,6 +74,10 @@ def parser() -> argparse.ArgumentParser:
     tr.add_argument("config", type=Path)
     tr.add_argument("--execute", action="store_true", help="Download weights and start GPU training")
     tr.add_argument("--resume", type=Path)
+    tr.add_argument("--fit-report", type=Path,
+                    help="Successful fit-probe report matching this config and dataset")
+    tr.add_argument("--readiness-report", type=Path)
+    tr.add_argument("--doctor-report", type=Path)
     merge = sub.add_parser("merge")
     merge.add_argument("run", type=Path)
     merge.add_argument("output", type=Path)
@@ -83,6 +110,16 @@ def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
         match args.command:
+            case "doctor":
+                result = doctor(args.workspace, config=args.config, gpu=args.gpu,
+                                require_training=args.require_training, report=args.report)
+            case "fit-probe":
+                result = fit_probe(args.config, execute=args.execute, report=args.report)
+            case "prepare-pilot":
+                result = prepare_pilot(args.workspace, args.source, args.name,
+                                       training_allowed=args.training_allowed, language=args.language,
+                                       genre=args.genre, topics=args.topic, model_id=args.model,
+                                       model_revision=args.revision, max_steps=args.max_steps)
             case "init":
                 init_workspace(args.workspace)
                 result = {"initialized": str(args.workspace.resolve())}
@@ -105,7 +142,10 @@ def main(argv=None) -> int:
             case "train":
                 if args.resume and not args.execute:
                     raise LanguageRigError("--resume requires --execute.")
-                result = run_training(args.config, execute=args.execute, resume=args.resume)
+                result = run_training(args.config, execute=args.execute, resume=args.resume,
+                                      fit_report=args.fit_report,
+                                      readiness_report=args.readiness_report,
+                                      doctor_report=args.doctor_report)
             case "merge":
                 result = merge_adapter(args.run, args.output, execute=args.execute)
             case "package-model":
@@ -120,7 +160,12 @@ def main(argv=None) -> int:
             case "publish-rag":
                 result = publish_rag(args.export, url=args.url, token=os.getenv(args.token_env, ""))
         print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
-        return 1 if isinstance(result, dict) and result.get("errors") else 0
+        if isinstance(result, dict):
+            if result.get("errors"):
+                return 1
+            if result.get("training_gate") in ("review", "blocked"):
+                return 1
+        return 0
     except (LanguageRigError, OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"LanguageRig: {exc}", file=sys.stderr)
         return 2

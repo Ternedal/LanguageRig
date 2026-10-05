@@ -9,6 +9,10 @@ datasæt med opdeling efter værk, en valgfri QLoRA-runner, checkpoint-resume,
 adapter-merge, GGUF-pakning/Ollama-registrering og sammenligning af modelversioner.
 Bogteksten kan også eksporteres til ModelRigs eksisterende RAG-API.
 
+Til første kørsel på riggen findes et samlet
+[Windows/WSL-pilotforløb](docs/PILOT.md): bogimport, datasæt og konfiguration
+med prepare-pilot, lokalt miljøtjek med doctor og eksplicit træningsstart.
+
 Der er endnu ingen grafisk bogvælger, automatisk generering af træningsdialoger
 eller OCR. GPU-træning og kvalitet på virkelige danske bøger skal kvalificeres
 på riggen; syntetiske import- og transporttests dokumenterer ikke modelkvalitet.
@@ -115,11 +119,32 @@ source .venv-wsl/bin/activate
 python -m pip install -e '.[train]'
 export CUDA_VISIBLE_DEVICES=0
 languagerig train examples/munin-pilot.json
-languagerig train examples/munin-pilot.json --execute
+CUDA_VISIBLE_DEVICES=0 languagerig fit-probe examples/munin-pilot.json --execute --report data/checks/fit-probe.json
+languagerig train examples/munin-pilot.json --execute \
+  --fit-report data/checks/fit-probe.json \
+  --readiness-report data/checks/readiness.json \
+  --doctor-report data/checks/train-doctor.json
 ~~~
 
+Før første rigtige job kan hele readiness-forløbet køres med én kommando:
+
+~~~powershell
+.\\scripts\\check-pilot-ready.ps1 -Config '.\\data\\pilots\\dansk-pilot\\configs\\dansk-pilot.json' -Gpu 0
+~~~
+
+Den kører doctor og fit-probe i rækkefølge og udskriver et samlet READY-resumé
+med GPU, compute capability, samlet VRAM, minimum observeret fri VRAM,
+modelrevision og sekvenslængde.
+
 Runneren bruger én synlig GPU, 4-bit NF4, LoRA på lineære lag, batch=1,
-gradient accumulation og gradient checkpointing. To 12 GB-kort samles ikke
+gradient accumulation og gradient checkpointing. En eksekverende træningskørsel
+kræver en READY-kvittering samt den doctor- og fit-probe-rapport, som
+kvitteringen hasher. Config- og datasæthash skal stadig matche; ændres nogen af
+gate-rapporterne efter readiness, afvises træningsstart. Fit-proben låser desuden den konkrete Hugging Face-
+commit, og træningen bruger præcis denne resolved revision, selv hvis et tag som
+main flytter sig mellem probe og træningsstart. GPU-model, compute capability, samlet VRAM og de centrale runtime-versioner
+(torch, transformers, peft, accelerate, bitsandbytes og datasets) bindes også
+til gaten; ændres miljøet, kræves en ny fit-probe. To 12 GB-kort samles ikke
 automatisk til én 24 GB-pulje. Stop øvrige modeller på det valgte kort og mål
 VRAM/ydelse med et kort pilotjob. En mindre kompatibel dansk/multilingual model
 kan vælges i konfigurationen, hvis kandidaten ikke passer.
@@ -131,6 +156,9 @@ Testsplit bruges aldrig til træning eller checkpoint-valg.
 
 ~~~bash
 languagerig train examples/munin-pilot.json --execute \
+  --fit-report data/checks/fit-probe.json \
+  --readiness-report data/checks/readiness.json \
+  --doctor-report data/checks/train-doctor.json \
   --resume data/runs/dansk-pilot/checkpoint-20
 ~~~
 

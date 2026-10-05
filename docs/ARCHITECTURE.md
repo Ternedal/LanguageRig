@@ -40,6 +40,9 @@ flowchart TD
   eksplicit lokal Ollama-registrering og eksisterende RAG-API-handoff.
 - Implementeret: direkte Ollama-sammenligning med modeldigests,
   formatkontroller og HTML til menneskelig vurdering.
+- Implementeret: samlet pilotforberedelse og Windows/WSL-start med
+  lokalt miljøtjek, pakkeversionskontrol, én GPU og en lille 4-bit beregning.
+  Se [pilotvejledningen](PILOT.md).
 - Afventer: faktisk GPU-træning, dansk/faglig modelgevinst, konverterings-
   kvalifikation på valgt arkitektur, rigtige værktøjskald og klienttest.
 - Senere produktarbejde: grafisk bogvælger, kategoriforslag, OCR,

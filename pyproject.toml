@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "languagerig"
 version = "0.1.0"
 description = "Local Danish ebook corpus, model adaptation and ModelRig handoff"
-requires-python = ">=3.11"
-dependencies = ["pypdf>=5,<7"]
+requires-python = ">=3.10"
+dependencies = ["pypdf>=5,<7", "packaging>=24"]
 
 [project.optional-dependencies]
 train = [

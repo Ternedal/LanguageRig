@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import importlib.metadata
 import json
+import hashlib
 import math
 import os
 from pathlib import Path
@@ -87,10 +88,79 @@ def encode_batch(batch: dict, tokenizer, mode: str, length: int) -> dict:
     return result
 
 
-def run_training(config_path: Path, *, execute=False, resume: Path | None = None) -> dict:
+def verify_fit_gate(config_path: Path, report_path: Path) -> dict:
+    plan = training_plan(config_path)
+    if not report_path.is_file():
+        raise LanguageRigError("Training requires a completed fit-probe report.")
+    report = read_json(report_path)
+    if report.get("format") != "languagerig-fit-probe/v1":
+        raise LanguageRigError("Fit-probe report format is invalid.")
+    if report.get("status") != "passed" or report.get("training_gate") != "pass":
+        raise LanguageRigError("Fit-probe did not grant the training gate.")
+    if report.get("config_sha256") != plan["config_sha256"]:
+        raise LanguageRigError("Fit-probe config differs from the training config.")
+    if report.get("dataset_sha256") != plan["dataset_sha256"]:
+        raise LanguageRigError("Fit-probe dataset differs from the training dataset.")
+    revision = report.get("resolved_revision")
+    if not isinstance(revision, str) or len(revision) != 40 or any(
+            char not in "0123456789abcdef" for char in revision.lower()):
+        raise LanguageRigError("Fit-probe did not pin a valid model commit revision.")
+    return report
+
+
+def verify_fit_runtime(report: dict, gpu_name: str, compute_capability: str,
+                       total_memory_bytes: int, runtime_versions: dict) -> None:
+    if report.get("gpu") != gpu_name:
+        raise LanguageRigError("Fit-probe GPU differs from the selected training GPU.")
+    if report.get("gpu_compute_capability") != compute_capability:
+        raise LanguageRigError("Fit-probe GPU compute capability differs from training.")
+    if report.get("gpu_total_memory_bytes") != total_memory_bytes:
+        raise LanguageRigError("Fit-probe GPU VRAM differs from training.")
+    probed = report.get("runtime_versions")
+    if not isinstance(probed, dict):
+        raise LanguageRigError("Fit-probe runtime versions are missing.")
+    for name, version in runtime_versions.items():
+        if probed.get(name) != version:
+            raise LanguageRigError(
+                f"Fit-probe runtime differs for {name}; run a new fit-probe.")
+
+
+def _file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_readiness_gate(readiness_report: Path, fit_report: Path,
+                          doctor_report: Path) -> dict:
+    if not readiness_report.is_file():
+        raise LanguageRigError("Training requires a READY readiness receipt.")
+    if not fit_report.is_file() or not doctor_report.is_file():
+        raise LanguageRigError("Readiness references require current doctor and fit reports.")
+    receipt = read_json(readiness_report)
+    if receipt.get("format") != "languagerig-readiness/v1" or receipt.get("status") != "READY":
+        raise LanguageRigError("Readiness receipt is not READY.")
+    if receipt.get("fit_sha256") != _file_sha256(fit_report):
+        raise LanguageRigError("Fit-probe report changed after readiness.")
+    if receipt.get("doctor_sha256") != _file_sha256(doctor_report):
+        raise LanguageRigError("Doctor report changed after readiness.")
+    return receipt
+
+
+def run_training(config_path: Path, *, execute=False, resume: Path | None = None,
+                 fit_report: Path | None = None, readiness_report: Path | None = None,
+                 doctor_report: Path | None = None) -> dict:
     plan = training_plan(config_path)
     if not execute:
         return plan
+    if fit_report is None:
+        raise LanguageRigError("Training requires --fit-report from a successful fit-probe.")
+    if readiness_report is None or doctor_report is None:
+        raise LanguageRigError("Training requires --readiness-report and --doctor-report.")
+    readiness = verify_readiness_gate(readiness_report, fit_report, doctor_report)
+    fit_gate = verify_fit_gate(config_path, fit_report)
     missing = [name for name, available in plan["dependencies"].items() if not available]
     if missing:
         raise LanguageRigError("Install languagerig[train]; missing: " + ", ".join(missing))
@@ -105,8 +175,16 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         raise LanguageRigError("Select one GPU with CUDA_VISIBLE_DEVICES before training.")
     from datasets import load_dataset
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
-                              BitsAndBytesConfig, Trainer, TrainerCallback, TrainingArguments)
+    from transformers import (AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
+                              Trainer, TrainerCallback, TrainingArguments, set_seed)
+    runtime_versions = {name: importlib.metadata.version(name) for name in
+                        ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}
+    gpu_name = torch.cuda.get_device_name(0)
+    props = torch.cuda.get_device_properties(0)
+    compute_capability = f"{props.major}.{props.minor}"
+    total_memory_bytes = int(props.total_memory)
+    verify_fit_runtime(fit_gate, gpu_name, compute_capability,
+                       total_memory_bytes, runtime_versions)
     config = plan["config"]
     output = Path(config["output_dir"])
     run_path = output / "run.json"
@@ -120,21 +198,35 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         if output.resolve() not in resume.parents or not (resume / "trainer_state.json").is_file():
             raise LanguageRigError("Resume must point to a checkpoint inside the original output directory.")
         revision = previous["resolved_revision"]
+        if revision != fit_gate["resolved_revision"]:
+            raise LanguageRigError("Fit-probe model revision differs from the run being resumed.")
     else:
         if output.exists() and any(output.iterdir()):
             raise LanguageRigError("Run directory is not empty; choose a new output_dir or resume.")
-        resolved = AutoConfig.from_pretrained(config["model_id"], revision=config["model_revision"], trust_remote_code=False)
-        revision = getattr(resolved, "_commit_hash", None)
-        if not revision:
-            raise LanguageRigError("Cannot pin model revision; use a Hugging Face model repository.")
+        revision = fit_gate["resolved_revision"]
     output.mkdir(parents=True, exist_ok=True)
     run = {**plan, "format": "languagerig-run/v1", "status": "running",
            "resolved_revision": revision, "started_at": now(), "training_executed": True,
-           "gpu": torch.cuda.get_device_name(0), "quality_improvement": "not_measured",
-           "runtime_versions": {name: importlib.metadata.version(name) for name in
-                                ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}}
+           "readiness": {"report": str(readiness_report.resolve()),
+                         "doctor_report": str(doctor_report.resolve()),
+                         "fit_sha256": readiness.get("fit_sha256"),
+                         "doctor_sha256": readiness.get("doctor_sha256"),
+                         "checked_at": readiness.get("checked_at")},
+           "fit_probe": {"report": str(fit_report.resolve()),
+                         "completed_at": fit_gate.get("completed_at"),
+                         "minimum_observed_free_bytes": fit_gate.get("vram", {}).get("minimum_observed_free_bytes"),
+                         "training_gate": fit_gate.get("training_gate"),
+                         "resolved_revision": fit_gate.get("resolved_revision")},
+           "gpu": gpu_name,
+           "gpu_compute_capability": compute_capability,
+           "gpu_total_memory_bytes": total_memory_bytes,
+           "quality_improvement": "not_measured",
+           "runtime_versions": runtime_versions}
+    # Loading may reuse the local cache; network download activity is not tracked.
+    run.update(model_downloaded=None, model_load_status="not_started")
     write_json(run_path, run)
     try:
+        set_seed(config["seed"])
         tokenizer = AutoTokenizer.from_pretrained(config["model_id"], revision=revision, trust_remote_code=False)
         if tokenizer.eos_token_id is None:
             raise LanguageRigError("Tokenizer needs an EOS token.")
@@ -143,12 +235,16 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         tokenizer.padding_side = "right"
         if plan["mode"] == "instruction" and not tokenizer.chat_template:
             raise LanguageRigError("Instruction tuning requires the model's chat template.")
+        run["model_load_status"] = "loading"
+        write_json(run_path, run)
         model = AutoModelForCausalLM.from_pretrained(
             config["model_id"], revision=revision, trust_remote_code=False,
             quantization_config=BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                                                   bnb_4bit_use_double_quant=True,
                                                   bnb_4bit_compute_dtype=torch.float16),
             dtype=torch.float16, device_map={"": 0})
+        run["model_load_status"] = "loaded"
+        write_json(run_path, run)
         model.config.use_cache = False
         model = prepare_model_for_kbit_training(model)
         model = get_peft_model(model, LoraConfig(
@@ -198,6 +294,8 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
         write_json(run_path, run)
         return run
     except BaseException as exc:
+        if run["model_load_status"] != "loaded":
+            run["model_load_status"] = "failed"
         run.update(status="failed", ended_at=now(), error_type=type(exc).__name__)
         write_json(run_path, run)
         raise
