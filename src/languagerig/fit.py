@@ -63,8 +63,11 @@ def fit_probe(config_path: Path, *, execute: bool = False, report: Path | None =
         if tokenizer.eos_token_id is None:
             raise LanguageRigError("Tokenizer needs an EOS token.")
 
+        props = torch.cuda.get_device_properties(0)
         result.update(resolved_revision=revision, model_load_status="loading",
                       gpu=torch.cuda.get_device_name(0),
+                      gpu_compute_capability=f"{props.major}.{props.minor}",
+                      gpu_total_memory_bytes=int(props.total_memory),
                       runtime_versions={name: importlib.metadata.version(name) for name in
                                         ("torch", "transformers", "peft", "accelerate",
                                          "bitsandbytes", "datasets")})
