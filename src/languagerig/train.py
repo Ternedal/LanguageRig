@@ -87,10 +87,30 @@ def encode_batch(batch: dict, tokenizer, mode: str, length: int) -> dict:
     return result
 
 
-def run_training(config_path: Path, *, execute=False, resume: Path | None = None) -> dict:
+def verify_fit_gate(config_path: Path, report_path: Path) -> dict:
+    plan = training_plan(config_path)
+    if not report_path.is_file():
+        raise LanguageRigError("Training requires a completed fit-probe report.")
+    report = read_json(report_path)
+    if report.get("format") != "languagerig-fit-probe/v1":
+        raise LanguageRigError("Fit-probe report format is invalid.")
+    if report.get("status") != "passed" or report.get("training_gate") != "pass":
+        raise LanguageRigError("Fit-probe did not grant the training gate.")
+    if report.get("config_sha256") != plan["config_sha256"]:
+        raise LanguageRigError("Fit-probe config differs from the training config.")
+    if report.get("dataset_sha256") != plan["dataset_sha256"]:
+        raise LanguageRigError("Fit-probe dataset differs from the training dataset.")
+    return report
+
+
+def run_training(config_path: Path, *, execute=False, resume: Path | None = None,
+                 fit_report: Path | None = None) -> dict:
     plan = training_plan(config_path)
     if not execute:
         return plan
+    if fit_report is None:
+        raise LanguageRigError("Training requires --fit-report from a successful fit-probe.")
+    fit_gate = verify_fit_gate(config_path, fit_report)
     missing = [name for name, available in plan["dependencies"].items() if not available]
     if missing:
         raise LanguageRigError("Install languagerig[train]; missing: " + ", ".join(missing))
@@ -130,6 +150,10 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
     output.mkdir(parents=True, exist_ok=True)
     run = {**plan, "format": "languagerig-run/v1", "status": "running",
            "resolved_revision": revision, "started_at": now(), "training_executed": True,
+           "fit_probe": {"report": str(fit_report.resolve()),
+                         "completed_at": fit_gate.get("completed_at"),
+                         "minimum_observed_free_bytes": fit_gate.get("vram", {}).get("minimum_observed_free_bytes"),
+                         "training_gate": fit_gate.get("training_gate")},
            "gpu": torch.cuda.get_device_name(0), "quality_improvement": "not_measured",
            "runtime_versions": {name: importlib.metadata.version(name) for name in
                                 ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}}
