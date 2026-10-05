@@ -60,6 +60,19 @@ python -m pip install -e '.[train]'
 Et allerede fungerende WSL-miljø kan bruges med -WslPython /absolut/sti/bin/python.
 Windows-venv'en kan ikke bruges som Linux-venv.
 
+## Én readiness-kommando
+
+Til den første rigtige rig-kørsel er den anbefalede indgang:
+
+~~~powershell
+.\\scripts\\check-pilot-ready.ps1 -Config '.\\data\\pilots\\dansk-pilot\\configs\\dansk-pilot.json' -Gpu 0
+~~~
+
+Scriptet kører først miljøtjek og derefter den rigtige model-fit-probe. Kun hvis
+begge gates består, udskrives status READY sammen med GPU-identitet, compute
+capability, total VRAM, laveste observerede frie VRAM-margin, modelrevision og
+sekvenslængde. Det starter ikke fuld træning.
+
 ## Miljøtjek og træning
 
 Kør fra PowerShell. Standardkørslen laver kun miljøtjek; -Gpu er kortets indeks
