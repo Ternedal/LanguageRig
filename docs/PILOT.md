@@ -75,7 +75,19 @@ ledig/samlet VRAM og diskplads. training_environment_ready betyder, at disse
 miljøkontroller er bestået; det beviser ikke, at 8B-kandidaten passer i VRAM,
 eller at træningen forbedrer dansk. Det faktiske modeljob skal afprøves.
 
-Ved et bestået miljøtjek kan træning startes eksplicit:
+Ved et bestået miljøtjek bør modelens faktiske VRAM-fit måles før et længere job:
+
+~~~powershell
+.\scripts\train-pilot.ps1 -Config '.\data\pilots\dansk-pilot\configs\dansk-pilot.json' -Gpu 0 -FitProbe
+~~~
+
+-FitProbe må hente og loade den valgte grundmodel. Den kører præcis én
+batch=1 forward/backward/AdamW-mikrostep ved konfigurationens fulde
+max_seq_length, gemmer peak allocated/reserved VRAM i checks/fit-probe.json
+og gemmer ingen adapter. En bestået probe viser kun, at denne ene mikrostep
+passer; den beviser ikke langtidstabilitet eller bedre dansk modelkvalitet.
+
+Når både miljøtjek og fit-probe er bestået, kan træning startes eksplicit:
 
 ~~~powershell
 .\scripts\train-pilot.ps1 -Config '.\data\pilots\dansk-pilot\configs\dansk-pilot.json' -Gpu 0 -Execute
@@ -99,6 +111,7 @@ cachegenbrug spores ikke i træningskørslen.
 
 ~~~bash
 languagerig doctor --gpu 0 --require-training --report data/checks/doctor.json
+CUDA_VISIBLE_DEVICES=0 languagerig fit-probe data/configs/pilot-v2.json --execute --report data/checks/fit-probe.json
 languagerig --workspace data prepare-pilot /path/to/books --name pilot-v2 --training-allowed
 ~~~
 
@@ -108,5 +121,5 @@ CUDA_VISIBLE_DEVICES sættes for træningsprocessen som vist i README.
 
 CI tester Python-forløbet på Windows/Linux, det rigtige forberedelsesscript på
 Windows og WSL-argumenttransport med en kontrolleret stub. Bash-startens
-stop/execute/resume-forløb testes på Linux. Der køres ingen rigtige CUDA-job
+stop/fit/execute/resume-forløb testes på Linux. Der køres ingen rigtige CUDA-job
 eller WSL-distributioner i CI. Afprøvning på riggen mangler stadig.
