@@ -107,9 +107,14 @@ def verify_fit_gate(config_path: Path, report_path: Path) -> dict:
     return report
 
 
-def verify_fit_runtime(report: dict, gpu_name: str, runtime_versions: dict) -> None:
+def verify_fit_runtime(report: dict, gpu_name: str, compute_capability: str,
+                       total_memory_bytes: int, runtime_versions: dict) -> None:
     if report.get("gpu") != gpu_name:
         raise LanguageRigError("Fit-probe GPU differs from the selected training GPU.")
+    if report.get("gpu_compute_capability") != compute_capability:
+        raise LanguageRigError("Fit-probe GPU compute capability differs from training.")
+    if report.get("gpu_total_memory_bytes") != total_memory_bytes:
+        raise LanguageRigError("Fit-probe GPU VRAM differs from training.")
     probed = report.get("runtime_versions")
     if not isinstance(probed, dict):
         raise LanguageRigError("Fit-probe runtime versions are missing.")
@@ -146,7 +151,11 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
     runtime_versions = {name: importlib.metadata.version(name) for name in
                         ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}
     gpu_name = torch.cuda.get_device_name(0)
-    verify_fit_runtime(fit_gate, gpu_name, runtime_versions)
+    props = torch.cuda.get_device_properties(0)
+    compute_capability = f"{props.major}.{props.minor}"
+    total_memory_bytes = int(props.total_memory)
+    verify_fit_runtime(fit_gate, gpu_name, compute_capability,
+                       total_memory_bytes, runtime_versions)
     config = plan["config"]
     output = Path(config["output_dir"])
     run_path = output / "run.json"
@@ -174,7 +183,10 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
                          "minimum_observed_free_bytes": fit_gate.get("vram", {}).get("minimum_observed_free_bytes"),
                          "training_gate": fit_gate.get("training_gate"),
                          "resolved_revision": fit_gate.get("resolved_revision")},
-           "gpu": gpu_name, "quality_improvement": "not_measured",
+           "gpu": gpu_name,
+           "gpu_compute_capability": compute_capability,
+           "gpu_total_memory_bytes": total_memory_bytes,
+           "quality_improvement": "not_measured",
            "runtime_versions": runtime_versions}
     # Loading may reuse the local cache; network download activity is not tracked.
     run.update(model_downloaded=None, model_load_status="not_started")
