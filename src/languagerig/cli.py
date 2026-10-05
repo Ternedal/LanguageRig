@@ -74,6 +74,8 @@ def parser() -> argparse.ArgumentParser:
     tr.add_argument("config", type=Path)
     tr.add_argument("--execute", action="store_true", help="Download weights and start GPU training")
     tr.add_argument("--resume", type=Path)
+    tr.add_argument("--fit-report", type=Path,
+                    help="Successful fit-probe report matching this config and dataset")
     merge = sub.add_parser("merge")
     merge.add_argument("run", type=Path)
     merge.add_argument("output", type=Path)
@@ -138,7 +140,8 @@ def main(argv=None) -> int:
             case "train":
                 if args.resume and not args.execute:
                     raise LanguageRigError("--resume requires --execute.")
-                result = run_training(args.config, execute=args.execute, resume=args.resume)
+                result = run_training(args.config, execute=args.execute, resume=args.resume,
+                                      fit_report=args.fit_report)
             case "merge":
                 result = merge_adapter(args.run, args.output, execute=args.execute)
             case "package-model":
