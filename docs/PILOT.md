@@ -103,9 +103,10 @@ max_seq_length, gemmer peak allocated/reserved VRAM i checks/fit-probe.json
 og gemmer ingen adapter. En bestået probe viser kun, at denne ene mikrostep
 passer; den beviser ikke langtidstabilitet eller bedre dansk modelkvalitet.
 
-Når både miljøtjek og fit-probe er bestået og rapporten har
-training_gate=pass, kan træning startes eksplicit. Launcher og CLI kontrollerer,
-at rapportens config- og datasæthash matcher den aktuelle træningsplan.
+Når både miljøtjek og fit-probe er bestået, og readiness-kvitteringen har
+status READY, kan træning startes eksplicit. Launcher og CLI kontrollerer både
+readiness-kvitteringens SHA-256-binding til doctor/fit-rapporterne og at
+fit-rapportens config- og datasæthash matcher den aktuelle træningsplan.
 Den konkrete Hugging Face-commit, som fit-proben loadede, gemmes som
 resolved_revision og genbruges direkte af træningen, så et flyttet main-tag
 ikke kan ændre modellen mellem probe og job. Den valgte GPU-model, compute capability, samlede VRAM og de centrale
@@ -135,13 +136,17 @@ cachegenbrug spores ikke i træningskørslen.
 ~~~bash
 languagerig doctor --gpu 0 --require-training --report data/checks/doctor.json
 CUDA_VISIBLE_DEVICES=0 languagerig fit-probe data/configs/pilot-v2.json --execute --report data/checks/fit-probe.json
-CUDA_VISIBLE_DEVICES=0 languagerig train data/configs/pilot-v2.json --execute --fit-report data/checks/fit-probe.json
+CUDA_VISIBLE_DEVICES=0 languagerig train data/configs/pilot-v2.json --execute \
+  --fit-report data/checks/fit-probe.json \
+  --readiness-report data/checks/readiness.json \
+  --doctor-report data/checks/train-doctor.json
 languagerig --workspace data prepare-pilot /path/to/books --name pilot-v2 --training-allowed
 ~~~
 
 Direkte prepare-pilot bruger alle træningsegnede bøger i det valgte workspace.
 doctor --gpu påvirker kun miljøtjekkets underproces. Ved direkte train skal
-CUDA_VISIBLE_DEVICES sættes for træningsprocessen som vist i README.
+CUDA_VISIBLE_DEVICES sættes for træningsprocessen som vist i README, og en
+gyldig readiness-kvittering samt de rapporter, den hasher, skal angives.
 
 CI tester Python-forløbet på Windows/Linux, det rigtige forberedelsesscript på
 Windows og WSL-argumenttransport med en kontrolleret stub. Bash-startens
