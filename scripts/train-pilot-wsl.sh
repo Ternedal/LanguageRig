@@ -35,13 +35,14 @@ if [[ $mode == fit ]]; then
     --report "$workspace_path/checks/fit-probe.json"
 elif [[ $mode == execute ]]; then
   fit_report="$workspace_path/checks/fit-probe.json"
-  if [[ ! -f $fit_report ]]; then
-    echo "Training blocked: run -FitProbe first; fit-probe report is missing." >&2
+  readiness_report="$workspace_path/checks/readiness.json"
+  if [[ ! -f $fit_report || ! -f $readiness_report || ! -f $report_path ]]; then
+    echo "Training blocked: run check-pilot-ready.ps1 first." >&2
     exit 3
   fi
   if [[ $resume_path == - ]]; then
-    "$python_exe" -m languagerig train "$config_path" --execute --fit-report "$fit_report"
+    "$python_exe" -m languagerig train "$config_path" --execute --fit-report "$fit_report" --readiness-report "$readiness_report" --doctor-report "$report_path"
   else
-    "$python_exe" -m languagerig train "$config_path" --execute --fit-report "$fit_report" --resume "$resume_path"
+    "$python_exe" -m languagerig train "$config_path" --execute --fit-report "$fit_report" --readiness-report "$readiness_report" --doctor-report "$report_path" --resume "$resume_path"
   fi
 fi
