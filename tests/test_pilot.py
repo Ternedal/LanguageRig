@@ -19,7 +19,7 @@ from languagerig.doctor import PROBE_MARKER, dependency_status, doctor, gpu_prob
 from languagerig.ingest import import_books
 from languagerig.fit import fit_probe
 from languagerig.pilot import prepare_pilot
-from languagerig.train import training_plan, verify_fit_gate
+from languagerig.train import training_plan, verify_fit_gate, verify_fit_runtime
 from test_languagerig import WorkspaceCase, epub, pdf
 
 
@@ -193,6 +193,35 @@ class TrainingGateTests(WorkspaceCase):
         config = self.config()
         with self.assertRaises(LanguageRigError):
             verify_fit_gate(config, self.root / "missing.json")
+
+
+class RuntimeGateTests(unittest.TestCase):
+    def report(self):
+        return {
+            "gpu": "NVIDIA GeForce RTX 3060",
+            "runtime_versions": {
+                "torch": "2.14.0+cu130",
+                "transformers": "5.0.0",
+                "peft": "0.18.0",
+                "accelerate": "1.2.0",
+                "bitsandbytes": "0.45.0",
+                "datasets": "3.0.0",
+            },
+        }
+
+    def test_runtime_gate_accepts_exact_environment(self):
+        report = self.report()
+        verify_fit_runtime(report, report["gpu"], dict(report["runtime_versions"]))
+
+    def test_runtime_gate_rejects_gpu_or_package_drift(self):
+        report = self.report()
+        with self.assertRaises(LanguageRigError):
+            verify_fit_runtime(report, "NVIDIA GeForce RTX 4090",
+                               dict(report["runtime_versions"]))
+        changed = dict(report["runtime_versions"])
+        changed["bitsandbytes"] = "0.46.0"
+        with self.assertRaises(LanguageRigError):
+            verify_fit_runtime(report, report["gpu"], changed)
 
 
 class PilotTests(WorkspaceCase):
