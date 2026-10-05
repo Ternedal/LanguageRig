@@ -71,7 +71,9 @@ Til den første rigtige rig-kørsel er den anbefalede indgang:
 Scriptet kører først miljøtjek og derefter den rigtige model-fit-probe. Kun hvis
 begge gates består, udskrives status READY sammen med GPU-identitet, compute
 capability, total VRAM, laveste observerede frie VRAM-margin, modelrevision og
-sekvenslængde. Det starter ikke fuld træning.
+sekvenslængde. Samme resumé gemmes som checks/readiness.json med SHA-256 af
+doctor- og fit-probe-rapporterne, så readiness-beslutningen kan auditeres.
+Det starter ikke fuld træning.
 
 ## Miljøtjek og træning
 
