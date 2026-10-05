@@ -334,20 +334,6 @@ class ShellLauncherTests(unittest.TestCase):
         self.config.parent.mkdir()
         self.config.write_text("{}", encoding="utf-8")
         self.log = self.root / "calls.jsonl"
-        checks = self.root / "checks"
-        checks.mkdir()
-        fit = checks / "fit-probe.json"
-        doctor = checks / "train-doctor.json"
-        readiness = checks / "readiness.json"
-        fit.write_text('{"status":"passed"}', encoding="utf-8")
-        doctor.write_text('{"training_environment_ready":true}', encoding="utf-8")
-        import hashlib
-        write_json(readiness, {
-            "format": "languagerig-readiness/v1",
-            "status": "READY",
-            "fit_sha256": hashlib.sha256(fit.read_bytes()).hexdigest(),
-            "doctor_sha256": hashlib.sha256(doctor.read_bytes()).hexdigest(),
-        })
         self.launcher = self.root / "fake python"
         self.launcher.write_text("#!" + sys.executable + "\n" + r'''
 import json,os,pathlib,sys
@@ -396,6 +382,20 @@ else:
         self.assertEqual(rows[1]["gpu"], "1")
 
     def test_execute_and_resume_preserve_argument_boundaries(self):
+        checks = self.root / "checks"
+        checks.mkdir()
+        fit = checks / "fit-probe.json"
+        doctor = checks / "train-doctor.json"
+        readiness = checks / "readiness.json"
+        fit.write_text('{"status":"passed"}', encoding="utf-8")
+        doctor.write_text('{"training_environment_ready":true}', encoding="utf-8")
+        import hashlib
+        write_json(readiness, {
+            "format": "languagerig-readiness/v1",
+            "status": "READY",
+            "fit_sha256": hashlib.sha256(fit.read_bytes()).hexdigest(),
+            "doctor_sha256": hashlib.sha256(doctor.read_bytes()).hexdigest(),
+        })
         resume = str(self.root / "checkpoint ' $ ; 20")
         completed, rows = self.run_launcher("execute", resume=resume)
         self.assertEqual(completed.returncode, 0, completed.stderr)
