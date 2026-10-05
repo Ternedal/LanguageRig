@@ -107,6 +107,18 @@ def verify_fit_gate(config_path: Path, report_path: Path) -> dict:
     return report
 
 
+def verify_fit_runtime(report: dict, gpu_name: str, runtime_versions: dict) -> None:
+    if report.get("gpu") != gpu_name:
+        raise LanguageRigError("Fit-probe GPU differs from the selected training GPU.")
+    probed = report.get("runtime_versions")
+    if not isinstance(probed, dict):
+        raise LanguageRigError("Fit-probe runtime versions are missing.")
+    for name, version in runtime_versions.items():
+        if probed.get(name) != version:
+            raise LanguageRigError(
+                f"Fit-probe runtime differs for {name}; run a new fit-probe.")
+
+
 def run_training(config_path: Path, *, execute=False, resume: Path | None = None,
                  fit_report: Path | None = None) -> dict:
     plan = training_plan(config_path)
@@ -131,6 +143,10 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import (AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
                               Trainer, TrainerCallback, TrainingArguments, set_seed)
+    runtime_versions = {name: importlib.metadata.version(name) for name in
+                        ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}
+    gpu_name = torch.cuda.get_device_name(0)
+    verify_fit_runtime(fit_gate, gpu_name, runtime_versions)
     config = plan["config"]
     output = Path(config["output_dir"])
     run_path = output / "run.json"
@@ -158,9 +174,8 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
                          "minimum_observed_free_bytes": fit_gate.get("vram", {}).get("minimum_observed_free_bytes"),
                          "training_gate": fit_gate.get("training_gate"),
                          "resolved_revision": fit_gate.get("resolved_revision")},
-           "gpu": torch.cuda.get_device_name(0), "quality_improvement": "not_measured",
-           "runtime_versions": {name: importlib.metadata.version(name) for name in
-                                ("torch", "transformers", "peft", "accelerate", "bitsandbytes", "datasets")}}
+           "gpu": gpu_name, "quality_improvement": "not_measured",
+           "runtime_versions": runtime_versions}
     # Loading may reuse the local cache; network download activity is not tracked.
     run.update(model_downloaded=None, model_load_status="not_started")
     write_json(run_path, run)
