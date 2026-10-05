@@ -156,7 +156,12 @@ def main(argv=None) -> int:
             case "publish-rag":
                 result = publish_rag(args.export, url=args.url, token=os.getenv(args.token_env, ""))
         print(json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False))
-        return 1 if isinstance(result, dict) and result.get("errors") else 0
+        if isinstance(result, dict):
+            if result.get("errors"):
+                return 1
+            if result.get("training_gate") in ("review", "blocked"):
+                return 1
+        return 0
     except (LanguageRigError, OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"LanguageRig: {exc}", file=sys.stderr)
         return 2
