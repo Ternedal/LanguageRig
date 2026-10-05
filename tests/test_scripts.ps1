@@ -9,7 +9,7 @@ function Assert-True {
     if (-not $Condition) { throw $Message }
 }
 try {
-    foreach ($scriptName in @('prepare-pilot.ps1', 'train-pilot.ps1')) {
+    foreach ($scriptName in @('prepare-pilot.ps1', 'train-pilot.ps1', 'check-pilot-ready.ps1')) {
         $tokens = $null
         $parseErrors = $null
         [Management.Automation.Language.Parser]::ParseFile(
@@ -70,6 +70,33 @@ for number in range(3):
     & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -Gpu 1 -FitProbe
     $last = @($global:wslCalls[-1] | Where-Object { $_ -ne '--' })
     Assert-True ($last[6] -eq '1' -and $last[7] -eq 'fit') 'Fit probe mode was altered'
+    $checks = Join-Path $workspaceRoot 'smoke/checks'
+    [IO.Directory]::CreateDirectory($checks) | Out-Null
+    $doctorFixture = @{ training_environment_ready = $true; status = 'passed' } | ConvertTo-Json
+    [IO.File]::WriteAllText((Join-Path $checks 'train-doctor.json'), $doctorFixture, [Text.UTF8Encoding]::new($false))
+    $fitFixture = @{
+        status = 'passed'
+        training_gate = 'pass'
+        gpu = 'NVIDIA GeForce RTX 3060'
+        gpu_compute_capability = '8.6'
+        gpu_total_memory_bytes = 12884901888
+        model_id = 'fixture/model'
+        resolved_revision = ('a' * 40)
+        measured_sequence_tokens = 1024
+        vram = @{
+            minimum_observed_free_bytes = 2147483648
+            minimum_observed_free_ratio = 0.1667
+        }
+    } | ConvertTo-Json -Depth 4
+    [IO.File]::WriteAllText((Join-Path $checks 'fit-probe.json'), $fitFixture, [Text.UTF8Encoding]::new($false))
+    $beforeReady = $global:wslCalls.Count
+    $readyOutput = & (Join-Path $repoRoot 'scripts/check-pilot-ready.ps1') -Config $configPath -Gpu 1 | Out-String
+    $readyCalls = @($global:wslCalls | Select-Object -Skip $beforeReady | Where-Object { $_[3] -ne 'wslpath' })
+    Assert-True ($readyCalls.Count -eq 2) 'Readiness did not run exactly doctor then fit probe'
+    $readyModes = @($readyCalls | ForEach-Object { @($_ | Where-Object { $_ -ne '--' })[7] })
+    Assert-True ($readyModes[0] -eq 'check' -and $readyModes[1] -eq 'fit') 'Readiness gate order changed'
+    Assert-True ($readyOutput.Contains('"status": "READY"')) 'Readiness summary was not READY'
+    Assert-True ($readyOutput.Contains('NVIDIA GeForce RTX 3060')) 'Readiness summary lost GPU identity'
     $exclusiveFailed = $false
     try { & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -FitProbe -Execute }
     catch { $exclusiveFailed = $true }
