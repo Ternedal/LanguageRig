@@ -25,6 +25,7 @@ def fit_probe(config_path: Path, *, execute: bool = False, report: Path | None =
         "batch_size": 1,
         "gradient_accumulation_steps": plan["config"]["gradient_accumulation_steps"],
         "training_executed": False,
+        "training_microstep_executed": False,
         "adapter_saved": False,
         "model_fit": "not_measured",
         "model_quality": "not_measured",
@@ -123,6 +124,7 @@ def fit_probe(config_path: Path, *, execute: bool = False, report: Path | None =
         torch.cuda.synchronize(0)
         samples["after_backward_bytes"] = int(torch.cuda.mem_get_info(0)[0])
         optimizer.step()
+        result["training_microstep_executed"] = True
         torch.cuda.synchronize(0)
         samples["after_optimizer_step_bytes"] = int(torch.cuda.mem_get_info(0)[0])
         optimizer.zero_grad(set_to_none=True)
@@ -150,7 +152,7 @@ def fit_probe(config_path: Path, *, execute: bool = False, report: Path | None =
                   "sequence length. training_gate also requires at least 512 MiB and 5% "
                   "observed free VRAM. It does not prove long-run stability or model quality."),
         )
-    except BaseException as exc:
+    except Exception as exc:
         result.update(status="failed", ended_at=now(), model_fit="failed",
                       training_gate="blocked",
                       error_type=type(exc).__name__, error=str(exc)[:600],
