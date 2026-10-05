@@ -49,6 +49,8 @@ $freePct = [Math]::Round(([double]$fit.vram.minimum_observed_free_ratio * 100), 
 $doctorSha = (Get-FileHash -LiteralPath $doctorReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $fitSha = (Get-FileHash -LiteralPath $fitReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $readinessPath = Join-Path $workspacePath 'checks/readiness.json'
+$escapedConfig = $configPath.Replace("'", "''")
+$nextCommand = ".\scripts\train-pilot.ps1 -Config '$escapedConfig' -Gpu $Gpu -Execute"
 $summary = [ordered]@{
     format = 'languagerig-readiness/v1'
     status = 'READY'
@@ -67,7 +69,7 @@ $summary = [ordered]@{
     doctor_sha256 = $doctorSha
     fit_report = $fitReportPath
     fit_sha256 = $fitSha
-    next_command = ".\\scripts\\train-pilot.ps1 -Config '$configPath' -Gpu $Gpu -Execute"
+    next_command = $nextCommand
 }
 $summaryJson = $summary | ConvertTo-Json -Depth 4
 [IO.File]::WriteAllText($readinessPath, $summaryJson + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
@@ -79,5 +81,8 @@ Write-Host ("GPU: {0} | CC {1} | VRAM {2} GiB" -f $summary.gpu, $summary.compute
 Write-Host ("Minimum observed free VRAM: {0} GiB ({1}%)" -f $summary.minimum_free_vram_gib, $summary.minimum_free_vram_percent)
 Write-Host ("Model: {0} @ {1}" -f $summary.model_id, $summary.resolved_revision)
 Write-Host ("Sequence: {0} tokens" -f $summary.sequence_tokens)
+Write-Host ''
+Write-Host 'Next command:'
+Write-Host $nextCommand
 Write-Host ''
 $summaryJson
