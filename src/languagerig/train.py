@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import importlib.metadata
 import json
+import hashlib
 import math
 import os
 from pathlib import Path
@@ -124,13 +125,41 @@ def verify_fit_runtime(report: dict, gpu_name: str, compute_capability: str,
                 f"Fit-probe runtime differs for {name}; run a new fit-probe.")
 
 
+def _file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_readiness_gate(readiness_report: Path, fit_report: Path,
+                          doctor_report: Path) -> dict:
+    if not readiness_report.is_file():
+        raise LanguageRigError("Training requires a READY readiness receipt.")
+    if not fit_report.is_file() or not doctor_report.is_file():
+        raise LanguageRigError("Readiness references require current doctor and fit reports.")
+    receipt = read_json(readiness_report)
+    if receipt.get("format") != "languagerig-readiness/v1" or receipt.get("status") != "READY":
+        raise LanguageRigError("Readiness receipt is not READY.")
+    if receipt.get("fit_sha256") != _file_sha256(fit_report):
+        raise LanguageRigError("Fit-probe report changed after readiness.")
+    if receipt.get("doctor_sha256") != _file_sha256(doctor_report):
+        raise LanguageRigError("Doctor report changed after readiness.")
+    return receipt
+
+
 def run_training(config_path: Path, *, execute=False, resume: Path | None = None,
-                 fit_report: Path | None = None) -> dict:
+                 fit_report: Path | None = None, readiness_report: Path | None = None,
+                 doctor_report: Path | None = None) -> dict:
     plan = training_plan(config_path)
     if not execute:
         return plan
     if fit_report is None:
         raise LanguageRigError("Training requires --fit-report from a successful fit-probe.")
+    if readiness_report is None or doctor_report is None:
+        raise LanguageRigError("Training requires --readiness-report and --doctor-report.")
+    readiness = verify_readiness_gate(readiness_report, fit_report, doctor_report)
     fit_gate = verify_fit_gate(config_path, fit_report)
     missing = [name for name, available in plan["dependencies"].items() if not available]
     if missing:
@@ -178,6 +207,11 @@ def run_training(config_path: Path, *, execute=False, resume: Path | None = None
     output.mkdir(parents=True, exist_ok=True)
     run = {**plan, "format": "languagerig-run/v1", "status": "running",
            "resolved_revision": revision, "started_at": now(), "training_executed": True,
+           "readiness": {"report": str(readiness_report.resolve()),
+                         "doctor_report": str(doctor_report.resolve()),
+                         "fit_sha256": readiness.get("fit_sha256"),
+                         "doctor_sha256": readiness.get("doctor_sha256"),
+                         "checked_at": readiness.get("checked_at")},
            "fit_probe": {"report": str(fit_report.resolve()),
                          "completed_at": fit_gate.get("completed_at"),
                          "minimum_observed_free_bytes": fit_gate.get("vram", {}).get("minimum_observed_free_bytes"),
