@@ -104,6 +104,9 @@ for number in range(3):
     Assert-True ($readyReceipt.status -eq 'READY') 'Readiness receipt status mismatch'
     Assert-True ($readyReceipt.doctor_sha256.Length -eq 64) 'Doctor receipt hash missing'
     Assert-True ($readyReceipt.fit_sha256.Length -eq 64) 'Fit receipt hash missing'
+    Assert-True ($readyReceipt.next_command.Contains("-Execute")) 'Readiness next command lost execute flag'
+    Assert-True ($readyReceipt.next_command.Contains("-Gpu 1")) 'Readiness next command lost GPU selection'
+    Assert-True ($readyOutput.Contains('Next command:')) 'Readiness output did not print next command'
     $exclusiveFailed = $false
     try { & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -FitProbe -Execute }
     catch { $exclusiveFailed = $true }
