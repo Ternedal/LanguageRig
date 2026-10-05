@@ -139,6 +139,21 @@ class FitProbeTests(WorkspaceCase):
         self.assertFalse(result["training_executed"])
 
 
+    def test_cli_fit_gate_review_is_nonzero(self):
+        with patch("languagerig.cli.fit_probe",
+                   return_value={"status": "passed", "training_gate": "review"}), \
+                contextlib.redirect_stdout(io.StringIO()):
+            code = main(["fit-probe", str(self.root / "fixture.json"), "--execute"])
+        self.assertEqual(code, 1)
+
+    def test_cli_fit_gate_pass_is_zero(self):
+        with patch("languagerig.cli.fit_probe",
+                   return_value={"status": "passed", "training_gate": "pass"}), \
+                contextlib.redirect_stdout(io.StringIO()):
+            code = main(["fit-probe", str(self.root / "fixture.json"), "--execute"])
+        self.assertEqual(code, 0)
+
+
 class TrainingGateTests(WorkspaceCase):
     def fit_report(self, config, *, status="passed", gate="pass", config_hash=None,
                    dataset_hash=None):
