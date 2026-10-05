@@ -19,6 +19,7 @@ from languagerig.doctor import PROBE_MARKER, dependency_status, doctor, gpu_prob
 from languagerig.ingest import import_books
 from languagerig.fit import fit_probe
 from languagerig.pilot import prepare_pilot
+from languagerig.train import training_plan, verify_fit_gate
 from test_languagerig import WorkspaceCase, epub, pdf
 
 
@@ -138,6 +139,43 @@ class FitProbeTests(WorkspaceCase):
         self.assertFalse(result["training_executed"])
 
 
+class TrainingGateTests(WorkspaceCase):
+    def fit_report(self, config, *, status="passed", gate="pass", config_hash=None,
+                   dataset_hash=None):
+        plan = training_plan(config)
+        path = self.root / "fit-probe.json"
+        write_json(path, {
+            "format": "languagerig-fit-probe/v1",
+            "status": status,
+            "training_gate": gate,
+            "config_sha256": config_hash or plan["config_sha256"],
+            "dataset_sha256": dataset_hash or plan["dataset_sha256"],
+            "vram": {"minimum_observed_free_bytes": 1024 * 1024 * 1024},
+        })
+        return path
+
+    def test_training_gate_accepts_only_matching_passed_probe(self):
+        config = self.config()
+        report = self.fit_report(config)
+        result = verify_fit_gate(config, report)
+        self.assertEqual(result["training_gate"], "pass")
+
+        for kwargs in (
+            {"status": "failed", "gate": "blocked"},
+            {"status": "passed", "gate": "review"},
+            {"config_hash": "stale-config"},
+            {"dataset_hash": "stale-dataset"},
+        ):
+            report = self.fit_report(config, **kwargs)
+            with self.assertRaises(LanguageRigError):
+                verify_fit_gate(config, report)
+
+    def test_training_gate_requires_report_file(self):
+        config = self.config()
+        with self.assertRaises(LanguageRigError):
+            verify_fit_gate(config, self.root / "missing.json")
+
+
 class PilotTests(WorkspaceCase):
     def fixture_books(self, count=3):
         for number in range(count):
@@ -210,6 +248,8 @@ class ShellLauncherTests(unittest.TestCase):
         self.config.parent.mkdir()
         self.config.write_text("{}", encoding="utf-8")
         self.log = self.root / "calls.jsonl"
+        (self.root / "checks").mkdir()
+        (self.root / "checks/fit-probe.json").write_text("{}", encoding="utf-8")
         self.launcher = self.root / "fake python"
         self.launcher.write_text("#!" + sys.executable + "\n" + r'''
 import json,os,pathlib,sys
