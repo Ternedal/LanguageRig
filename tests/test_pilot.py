@@ -334,8 +334,20 @@ class ShellLauncherTests(unittest.TestCase):
         self.config.parent.mkdir()
         self.config.write_text("{}", encoding="utf-8")
         self.log = self.root / "calls.jsonl"
-        (self.root / "checks").mkdir()
-        (self.root / "checks/fit-probe.json").write_text("{}", encoding="utf-8")
+        checks = self.root / "checks"
+        checks.mkdir()
+        fit = checks / "fit-probe.json"
+        doctor = checks / "train-doctor.json"
+        readiness = checks / "readiness.json"
+        fit.write_text('{"status":"passed"}', encoding="utf-8")
+        doctor.write_text('{"training_environment_ready":true}', encoding="utf-8")
+        import hashlib
+        write_json(readiness, {
+            "format": "languagerig-readiness/v1",
+            "status": "READY",
+            "fit_sha256": hashlib.sha256(fit.read_bytes()).hexdigest(),
+            "doctor_sha256": hashlib.sha256(doctor.read_bytes()).hexdigest(),
+        })
         self.launcher = self.root / "fake python"
         self.launcher.write_text("#!" + sys.executable + "\n" + r'''
 import json,os,pathlib,sys
