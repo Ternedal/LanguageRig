@@ -12,6 +12,7 @@ from .core import LanguageRigError, books, init_workspace, label_book
 from .corpus import build_dataset, verify_dataset
 from .doctor import doctor
 from .evaluate import evaluate
+from .fit import fit_probe
 from .ingest import import_books
 from .integrate import export_rag, merge_adapter, package_model, publish_rag, register_model
 from .pilot import prepare_pilot
@@ -28,6 +29,11 @@ def parser() -> argparse.ArgumentParser:
     check.add_argument("--gpu", type=int)
     check.add_argument("--require-training", action="store_true")
     check.add_argument("--report", type=Path)
+    fit = sub.add_parser("fit-probe")
+    fit.add_argument("config", type=Path)
+    fit.add_argument("--execute", action="store_true",
+                     help="Load the configured model and run one bounded training microstep")
+    fit.add_argument("--report", type=Path)
     pilot = sub.add_parser("prepare-pilot")
     pilot.add_argument("source", type=Path)
     pilot.add_argument("--name", required=True)
@@ -103,6 +109,8 @@ def main(argv=None) -> int:
             case "doctor":
                 result = doctor(args.workspace, config=args.config, gpu=args.gpu,
                                 require_training=args.require_training, report=args.report)
+            case "fit-probe":
+                result = fit_probe(args.config, execute=args.execute, report=args.report)
             case "prepare-pilot":
                 result = prepare_pilot(args.workspace, args.source, args.name,
                                        training_allowed=args.training_allowed, language=args.language,
