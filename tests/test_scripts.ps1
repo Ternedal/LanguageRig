@@ -67,6 +67,13 @@ for number in range(3):
     Assert-True ($last[5] -eq $global:wslConfig) 'WSL config argument was split or altered'
     Assert-True ($last[6] -eq '1' -and $last[7] -eq 'check') 'Default mode unexpectedly executed'
     Assert-True ($last[8] -eq '/mnt/c/Language Rig/.venv-wsl/bin/python') 'WSL Python path was altered'
+    & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -Gpu 1 -FitProbe
+    $last = @($global:wslCalls[-1] | Where-Object { $_ -ne '--' })
+    Assert-True ($last[6] -eq '1' -and $last[7] -eq 'fit') 'Fit probe mode was altered'
+    $exclusiveFailed = $false
+    try { & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -FitProbe -Execute }
+    catch { $exclusiveFailed = $true }
+    Assert-True $exclusiveFailed '-FitProbe and -Execute were allowed together'
     $checkpoint = Join-Path $testRoot 'checkpoint with spaces'
     [IO.Directory]::CreateDirectory($checkpoint) | Out-Null
     & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -Execute -Resume $checkpoint
