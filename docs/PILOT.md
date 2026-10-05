@@ -73,7 +73,8 @@ begge gates består, udskrives status READY sammen med GPU-identitet, compute
 capability, total VRAM, laveste observerede frie VRAM-margin, modelrevision og
 sekvenslængde. Samme resumé gemmes som checks/readiness.json med SHA-256 af
 doctor- og fit-probe-rapporterne, så readiness-beslutningen kan auditeres.
-Det starter ikke fuld træning.
+Scriptet udskriver også den præcise PowerShell-kommando til næste trin med den
+samme config og GPU. Det starter ikke fuld træning.
 
 ## Miljøtjek og træning
 
