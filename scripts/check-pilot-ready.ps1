@@ -82,7 +82,7 @@ Write-Host ("Minimum observed free VRAM: {0} GiB ({1}%)" -f $summary.minimum_fre
 Write-Host ("Model: {0} @ {1}" -f $summary.model_id, $summary.resolved_revision)
 Write-Host ("Sequence: {0} tokens" -f $summary.sequence_tokens)
 Write-Host ''
-Write-Host 'Next command:'
-Write-Host $nextCommand
+Write-Output 'Next command:'
+Write-Output $nextCommand
 Write-Host ''
 $summaryJson
