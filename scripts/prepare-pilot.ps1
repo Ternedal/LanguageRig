@@ -31,13 +31,23 @@ if ($Python) {
     $pythonExe = Join-Path $repoRoot '.venv/Scripts/python.exe'
     if (-not (Test-Path -LiteralPath $pythonExe)) {
         $launcher = Get-Command py -ErrorAction SilentlyContinue
+        $venvPath = Join-Path $repoRoot '.venv'
         if ($launcher) {
-            & $launcher.Source -3.12 -m venv (Join-Path $repoRoot '.venv')
+            $created = $false
+            foreach ($selector in @('-3.12', '-3.11', '-3.10')) {
+                & $launcher.Source $selector -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>$null
+                if ($LASTEXITCODE -ne 0) { continue }
+                & $launcher.Source $selector -m venv $venvPath
+                if ($LASTEXITCODE -eq 0) { $created = $true; break }
+            }
+            if (-not $created) { throw 'LanguageRig kraever Python 3.10 eller nyere.' }
         } else {
             $launcher = Get-Command python -ErrorAction Stop
-            & $launcher.Source -m venv (Join-Path $repoRoot '.venv')
+            & $launcher.Source -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'
+            if ($LASTEXITCODE -ne 0) { throw 'LanguageRig kraever Python 3.10 eller nyere.' }
+            & $launcher.Source -m venv $venvPath
+            if ($LASTEXITCODE -ne 0) { throw 'Oprettelse af Python-miljoe fejlede.' }
         }
-        if ($LASTEXITCODE -ne 0) { throw 'Oprettelse af Python-miljoe fejlede.' }
     }
 }
 Invoke-CheckedPython -Arguments @('-m', 'pip', 'install', '-e', $repoRoot)
