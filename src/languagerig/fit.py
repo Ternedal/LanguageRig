@@ -108,34 +108,48 @@ def fit_probe(config_path: Path, *, execute: bool = False, report: Path | None =
 
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats(0)
-        before_free, total = torch.cuda.mem_get_info(0)
+        free_after_load, total = torch.cuda.mem_get_info(0)
+        samples = {"after_model_load_bytes": int(free_after_load)}
         model.train()
         loss = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels).loss
+        torch.cuda.synchronize(0)
+        samples["after_forward_bytes"] = int(torch.cuda.mem_get_info(0)[0])
         if not torch.isfinite(loss).item():
             raise LanguageRigError("Fit probe produced a non-finite loss.")
         loss.backward()
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
         torch.cuda.synchronize(0)
-        after_free, _ = torch.cuda.mem_get_info(0)
+        samples["after_backward_bytes"] = int(torch.cuda.mem_get_info(0)[0])
+        optimizer.step()
+        torch.cuda.synchronize(0)
+        samples["after_optimizer_step_bytes"] = int(torch.cuda.mem_get_info(0)[0])
+        optimizer.zero_grad(set_to_none=True)
+        minimum_free = min(samples.values())
+        headroom_ratio = minimum_free / total if total else 0.0
+        minimum_required = max(512 * 1024 * 1024, int(total * 0.05))
+        gate = "pass" if minimum_free >= minimum_required else "review"
 
         result.update(
             status="passed", completed_at=now(), model_load_status="loaded",
             model_fit="single_full_sequence_microstep_passed",
+            training_gate=gate,
             measured_sequence_tokens=len(ids),
             loss=float(loss.detach().cpu()),
             vram={
                 "total_bytes": int(total),
-                "free_before_step_bytes": int(before_free),
-                "free_after_step_bytes": int(after_free),
+                "free_samples": samples,
+                "minimum_observed_free_bytes": int(minimum_free),
+                "minimum_required_headroom_bytes": int(minimum_required),
+                "minimum_observed_free_ratio": headroom_ratio,
                 "peak_allocated_bytes": int(torch.cuda.max_memory_allocated(0)),
                 "peak_reserved_bytes": int(torch.cuda.max_memory_reserved(0)),
             },
-            note=("This proves one batch=1 forward/backward/AdamW step at the configured "
-                  "sequence length. It does not prove long-run stability or model quality."),
+            note=("A pass proves one batch=1 forward/backward/AdamW step at the configured "
+                  "sequence length. training_gate also requires at least 512 MiB and 5% "
+                  "observed free VRAM. It does not prove long-run stability or model quality."),
         )
     except BaseException as exc:
         result.update(status="failed", ended_at=now(), model_fit="failed",
+                      training_gate="blocked",
                       error_type=type(exc).__name__, error=str(exc)[:600],
                       errors=["fit_probe_failed"])
     finally:
