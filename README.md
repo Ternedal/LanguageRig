@@ -119,11 +119,14 @@ source .venv-wsl/bin/activate
 python -m pip install -e '.[train]'
 export CUDA_VISIBLE_DEVICES=0
 languagerig train examples/munin-pilot.json
-languagerig train examples/munin-pilot.json --execute
+CUDA_VISIBLE_DEVICES=0 languagerig fit-probe examples/munin-pilot.json --execute --report data/checks/fit-probe.json
+languagerig train examples/munin-pilot.json --execute --fit-report data/checks/fit-probe.json
 ~~~
 
 Runneren bruger én synlig GPU, 4-bit NF4, LoRA på lineære lag, batch=1,
-gradient accumulation og gradient checkpointing. To 12 GB-kort samles ikke
+gradient accumulation og gradient checkpointing. En eksekverende træningskørsel
+kræver en bestået fit-probe med samme config- og datasæthash; en gammel eller
+mismatchet rapport afvises. To 12 GB-kort samles ikke
 automatisk til én 24 GB-pulje. Stop øvrige modeller på det valgte kort og mål
 VRAM/ydelse med et kort pilotjob. En mindre kompatibel dansk/multilingual model
 kan vælges i konfigurationen, hvis kandidaten ikke passer.
@@ -135,6 +138,7 @@ Testsplit bruges aldrig til træning eller checkpoint-valg.
 
 ~~~bash
 languagerig train examples/munin-pilot.json --execute \
+  --fit-report data/checks/fit-probe.json \
   --resume data/runs/dansk-pilot/checkpoint-20
 ~~~
 
