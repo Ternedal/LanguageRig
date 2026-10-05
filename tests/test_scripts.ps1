@@ -97,6 +97,13 @@ for number in range(3):
     Assert-True ($readyModes[0] -eq 'check' -and $readyModes[1] -eq 'fit') 'Readiness gate order changed'
     Assert-True ($readyOutput.Contains('"status": "READY"')) 'Readiness summary was not READY'
     Assert-True ($readyOutput.Contains('NVIDIA GeForce RTX 3060')) 'Readiness summary lost GPU identity'
+    $readinessReceipt = Join-Path $checks 'readiness.json'
+    Assert-True (Test-Path -LiteralPath $readinessReceipt) 'Readiness receipt was not persisted'
+    $readyReceipt = Get-Content -LiteralPath $readinessReceipt -Raw | ConvertFrom-Json
+    Assert-True ($readyReceipt.format -eq 'languagerig-readiness/v1') 'Readiness receipt format mismatch'
+    Assert-True ($readyReceipt.status -eq 'READY') 'Readiness receipt status mismatch'
+    Assert-True ($readyReceipt.doctor_sha256.Length -eq 64) 'Doctor receipt hash missing'
+    Assert-True ($readyReceipt.fit_sha256.Length -eq 64) 'Fit receipt hash missing'
     $exclusiveFailed = $false
     try { & (Join-Path $repoRoot 'scripts/train-pilot.ps1') -Config $configPath -FitProbe -Execute }
     catch { $exclusiveFailed = $true }
