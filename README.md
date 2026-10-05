@@ -120,7 +120,10 @@ python -m pip install -e '.[train]'
 export CUDA_VISIBLE_DEVICES=0
 languagerig train examples/munin-pilot.json
 CUDA_VISIBLE_DEVICES=0 languagerig fit-probe examples/munin-pilot.json --execute --report data/checks/fit-probe.json
-languagerig train examples/munin-pilot.json --execute --fit-report data/checks/fit-probe.json
+languagerig train examples/munin-pilot.json --execute \
+  --fit-report data/checks/fit-probe.json \
+  --readiness-report data/checks/readiness.json \
+  --doctor-report data/checks/train-doctor.json
 ~~~
 
 Før første rigtige job kan hele readiness-forløbet køres med én kommando:
@@ -135,8 +138,9 @@ modelrevision og sekvenslængde.
 
 Runneren bruger én synlig GPU, 4-bit NF4, LoRA på lineære lag, batch=1,
 gradient accumulation og gradient checkpointing. En eksekverende træningskørsel
-kræver en bestået fit-probe med samme config- og datasæthash; en gammel eller
-mismatchet rapport afvises. Fit-proben låser desuden den konkrete Hugging Face-
+kræver en READY-kvittering samt den doctor- og fit-probe-rapport, som
+kvitteringen hasher. Config- og datasæthash skal stadig matche; ændres nogen af
+gate-rapporterne efter readiness, afvises træningsstart. Fit-proben låser desuden den konkrete Hugging Face-
 commit, og træningen bruger præcis denne resolved revision, selv hvis et tag som
 main flytter sig mellem probe og træningsstart. GPU-model, compute capability, samlet VRAM og de centrale runtime-versioner
 (torch, transformers, peft, accelerate, bitsandbytes og datasets) bindes også
@@ -153,6 +157,8 @@ Testsplit bruges aldrig til træning eller checkpoint-valg.
 ~~~bash
 languagerig train examples/munin-pilot.json --execute \
   --fit-report data/checks/fit-probe.json \
+  --readiness-report data/checks/readiness.json \
+  --doctor-report data/checks/train-doctor.json \
   --resume data/runs/dansk-pilot/checkpoint-20
 ~~~
 
