@@ -128,7 +128,9 @@ gradient accumulation og gradient checkpointing. En eksekverende træningskørse
 kræver en bestået fit-probe med samme config- og datasæthash; en gammel eller
 mismatchet rapport afvises. Fit-proben låser desuden den konkrete Hugging Face-
 commit, og træningen bruger præcis denne resolved revision, selv hvis et tag som
-main flytter sig mellem probe og træningsstart. To 12 GB-kort samles ikke
+main flytter sig mellem probe og træningsstart. GPU-model og de centrale runtime-
+versioner (torch, transformers, peft, accelerate, bitsandbytes og datasets) bindes
+også til gaten; ændres miljøet, kræves en ny fit-probe. To 12 GB-kort samles ikke
 automatisk til én 24 GB-pulje. Stop øvrige modeller på det valgte kort og mål
 VRAM/ydelse med et kort pilotjob. En mindre kompatibel dansk/multilingual model
 kan vælges i konfigurationen, hvis kandidaten ikke passer.
