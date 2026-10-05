@@ -126,6 +126,7 @@ class FitProbeTests(WorkspaceCase):
         self.assertEqual(result["status"], "planned")
         self.assertEqual(result["model_fit"], "not_measured")
         self.assertFalse(result["training_executed"])
+        self.assertFalse(result["training_microstep_executed"])
         self.assertFalse(result["adapter_saved"])
         self.assertFalse(result["model_downloaded"])
 
@@ -152,6 +153,13 @@ class FitProbeTests(WorkspaceCase):
                 contextlib.redirect_stdout(io.StringIO()):
             code = main(["fit-probe", str(self.root / "fixture.json"), "--execute"])
         self.assertEqual(code, 0)
+
+
+    def test_keyboard_interrupt_is_not_swallowed_by_fit_probe(self):
+        config = self.config()
+        with patch("languagerig.fit.training_plan", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                fit_probe(config, execute=True)
 
 
 class TrainingGateTests(WorkspaceCase):
