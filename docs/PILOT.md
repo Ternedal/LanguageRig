@@ -40,6 +40,9 @@ projektmappe med -WorkspaceRoot og en kortere pilot med -MaxSteps.
 
 Åbn Ubuntu-22.04, og gå til samme checkout gennem WSL-stien, eksempelvis:
 
+LanguageRig kræver Python 3.10 eller nyere. Kontrollér python3 --version;
+brug en passende Python-installation til venv'en.
+
 ~~~bash
 cd /mnt/c/Users/admin/Desktop/LanguageRig
 python3 -m venv .venv-wsl

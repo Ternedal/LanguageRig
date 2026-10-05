@@ -129,8 +129,8 @@ def doctor(workspace: Path, *, config: Path | None = None, gpu: int | None = Non
         raise LanguageRigError("GPU index must be a nonnegative integer.")
     dependencies = dependency_status()
     base_errors, blockers = [], []
-    if sys.version_info < (3, 11):
-        base_errors.append("python_below_3_11")
+    if sys.version_info < (3, 10):
+        base_errors.append("python_below_3_10")
     for row in dependencies:
         if not row["compatible"]:
             (blockers if row["scope"] == "training" else base_errors).append(
