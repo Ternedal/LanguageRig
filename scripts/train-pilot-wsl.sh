@@ -28,9 +28,12 @@ export DO_NOT_TRACK=1
 export PYTHONIOENCODING=utf-8
 workspace_path=$("$python_exe" -c 'import json,pathlib,sys; p=pathlib.Path(sys.argv[1]); c=json.loads(p.read_text(encoding="utf-8")); print((p.parent/c["output_dir"]).resolve().parent.parent)' "$config_path")
 report_path="$workspace_path/checks/train-doctor.json"
-"$python_exe" -m languagerig --workspace "$workspace_path" doctor \
-  --config "$config_path" --require-training --report "$report_path"
-if [[ $mode == fit ]]; then
+if [[ $mode == check ]]; then
+  "$python_exe" -m languagerig --workspace "$workspace_path" doctor \
+    --config "$config_path" --require-training --report "$report_path"
+elif [[ $mode == fit ]]; then
+  "$python_exe" -m languagerig --workspace "$workspace_path" doctor \
+    --config "$config_path" --require-training --report "$report_path"
   "$python_exe" -m languagerig fit-probe "$config_path" --execute \
     --report "$workspace_path/checks/fit-probe.json"
 elif [[ $mode == execute ]]; then
