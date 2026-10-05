@@ -89,7 +89,10 @@ passer; den beviser ikke langtidstabilitet eller bedre dansk modelkvalitet.
 
 Når både miljøtjek og fit-probe er bestået og rapporten har
 training_gate=pass, kan træning startes eksplicit. Launcher og CLI kontrollerer,
-at rapportens config- og datasæthash matcher den aktuelle træningsplan:
+at rapportens config- og datasæthash matcher den aktuelle træningsplan.
+Den konkrete Hugging Face-commit, som fit-proben loadede, gemmes som
+resolved_revision og genbruges direkte af træningen, så et flyttet main-tag
+ikke kan ændre modellen mellem probe og job:
 
 ~~~powershell
 .\scripts\train-pilot.ps1 -Config '.\data\pilots\dansk-pilot\configs\dansk-pilot.json' -Gpu 0 -Execute
