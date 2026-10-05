@@ -82,3 +82,4 @@ for number in range(3):
     Remove-Item Function:\wsl.exe -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $testRoot -Recurse -Force
 }
+exit 0
