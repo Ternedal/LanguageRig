@@ -46,8 +46,13 @@ if ($fit.status -ne 'passed' -or $fit.training_gate -ne 'pass') {
 $totalGiB = [Math]::Round(([double]$fit.gpu_total_memory_bytes / 1GB), 2)
 $freeGiB = [Math]::Round(([double]$fit.vram.minimum_observed_free_bytes / 1GB), 2)
 $freePct = [Math]::Round(([double]$fit.vram.minimum_observed_free_ratio * 100), 1)
+$doctorSha = (Get-FileHash -LiteralPath $doctorReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$fitSha = (Get-FileHash -LiteralPath $fitReportPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$readinessPath = Join-Path $workspacePath 'checks/readiness.json'
 $summary = [ordered]@{
+    format = 'languagerig-readiness/v1'
     status = 'READY'
+    checked_at = [DateTimeOffset]::UtcNow.ToString('o')
     config = $configPath
     workspace = $workspacePath
     gpu = $fit.gpu
@@ -59,9 +64,14 @@ $summary = [ordered]@{
     resolved_revision = $fit.resolved_revision
     sequence_tokens = $fit.measured_sequence_tokens
     doctor_report = $doctorReportPath
+    doctor_sha256 = $doctorSha
     fit_report = $fitReportPath
+    fit_sha256 = $fitSha
     next_command = ".\\scripts\\train-pilot.ps1 -Config '$configPath' -Gpu $Gpu -Execute"
 }
+$summaryJson = Write-Host ("Receipt: {0}" -f $readinessPath)
+$summaryJson
+[IO.File]::WriteAllText($readinessPath, $summaryJson + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 
 Write-Host ''
 Write-Host '=== LANGUAGERIG READY ==='
