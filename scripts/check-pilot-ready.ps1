@@ -69,9 +69,9 @@ $summary = [ordered]@{
     fit_sha256 = $fitSha
     next_command = ".\\scripts\\train-pilot.ps1 -Config '$configPath' -Gpu $Gpu -Execute"
 }
-$summaryJson = Write-Host ("Receipt: {0}" -f $readinessPath)
-$summaryJson
+$summaryJson = $summary | ConvertTo-Json -Depth 4
 [IO.File]::WriteAllText($readinessPath, $summaryJson + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+Write-Host ("Receipt: {0}" -f $readinessPath)
 
 Write-Host ''
 Write-Host '=== LANGUAGERIG READY ==='
@@ -80,4 +80,4 @@ Write-Host ("Minimum observed free VRAM: {0} GiB ({1}%)" -f $summary.minimum_fre
 Write-Host ("Model: {0} @ {1}" -f $summary.model_id, $summary.resolved_revision)
 Write-Host ("Sequence: {0} tokens" -f $summary.sequence_tokens)
 Write-Host ''
-$summary | ConvertTo-Json -Depth 4
+$summaryJson
