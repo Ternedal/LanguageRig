@@ -19,7 +19,7 @@ from languagerig.doctor import PROBE_MARKER, dependency_status, doctor, gpu_prob
 from languagerig.ingest import import_books
 from languagerig.fit import fit_probe
 from languagerig.pilot import prepare_pilot
-from languagerig.train import training_plan, verify_fit_gate, verify_fit_runtime
+from languagerig.train import training_plan, verify_fit_gate, verify_fit_runtime, verify_readiness_gate
 from test_languagerig import WorkspaceCase, epub, pdf
 
 
@@ -193,6 +193,31 @@ class TrainingGateTests(WorkspaceCase):
         config = self.config()
         with self.assertRaises(LanguageRigError):
             verify_fit_gate(config, self.root / "missing.json")
+
+
+class ReadinessGateTests(unittest.TestCase):
+    def test_readiness_binds_current_gate_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            fit = root / "fit.json"
+            doctor = root / "doctor.json"
+            readiness = root / "readiness.json"
+            fit.write_text('{"status":"passed"}', encoding="utf-8")
+            doctor.write_text('{"training_environment_ready":true}', encoding="utf-8")
+            import hashlib
+            def sha(path):
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+            write_json(readiness, {
+                "format": "languagerig-readiness/v1",
+                "status": "READY",
+                "fit_sha256": sha(fit),
+                "doctor_sha256": sha(doctor),
+            })
+            result = verify_readiness_gate(readiness, fit, doctor)
+            self.assertEqual(result["status"], "READY")
+            fit.write_text('{"status":"changed"}', encoding="utf-8")
+            with self.assertRaises(LanguageRigError):
+                verify_readiness_gate(readiness, fit, doctor)
 
 
 class RuntimeGateTests(unittest.TestCase):
