@@ -375,10 +375,10 @@ else:
         self.assertEqual(rows[0]["gpu"], "1")
         self.assertIn(str(self.config), rows[0]["args"])
 
-    def test_failed_probe_stops_execute(self):
+    def test_execute_requires_existing_readiness_files(self):
         completed, rows = self.run_launcher("execute", blocked=True)
-        self.assertEqual(completed.returncode, 7)
-        self.assertEqual(len(rows), 1)
+        self.assertEqual(completed.returncode, 3)
+        self.assertEqual(rows, [])
 
     def test_fit_mode_runs_doctor_then_bounded_probe(self):
         completed, rows = self.run_launcher("fit")
@@ -397,6 +397,7 @@ else:
         readiness = checks / "readiness.json"
         fit.write_text('{"status":"passed"}', encoding="utf-8")
         doctor.write_text('{"training_environment_ready":true}', encoding="utf-8")
+        doctor_before = doctor.read_bytes()
         import hashlib
         write_json(readiness, {
             "format": "languagerig-readiness/v1",
@@ -407,9 +408,10 @@ else:
         resume = str(self.root / "checkpoint ' $ ; 20")
         completed, rows = self.run_launcher("execute", resume=resume)
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(len(rows), 2)
-        self.assertIn("train", rows[1]["args"])
-        self.assertEqual(rows[1]["args"][-2:], ["--resume", resume])
+        self.assertEqual(len(rows), 1)
+        self.assertIn("train", rows[0]["args"])
+        self.assertEqual(rows[0]["args"][-2:], ["--resume", resume])
+        self.assertEqual(doctor.read_bytes(), doctor_before)
 
     def test_multiple_gpus_and_resume_check_fail_before_python(self):
         for options in ({"gpu": "0,1"}, {"resume": "checkpoint"}, {"mode": "fit", "resume": "checkpoint"}):
@@ -430,7 +432,7 @@ else:
                              output_dir="../actual workspace/runs/real")
         write_json(external, configuration)
         completed = subprocess.run(
-            ["bash", str(self.script), str(external), "0", "execute", sys.executable, "-"],
+            ["bash", str(self.script), str(external), "0", "check", sys.executable, "-"],
             env={**os.environ, "WORLD_SIZE": "2"}, capture_output=True, text=True, timeout=10)
         self.assertEqual(completed.returncode, 1, completed.stderr)
         report = read_json(workspace / "checks/train-doctor.json")
