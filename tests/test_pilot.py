@@ -17,6 +17,7 @@ from languagerig.core import LanguageRigError, books, read_json, write_json
 from languagerig.corpus import verify_dataset
 from languagerig.doctor import PROBE_MARKER, dependency_status, doctor, gpu_probe
 from languagerig.ingest import import_books
+from languagerig.fit import fit_probe
 from languagerig.pilot import prepare_pilot
 from test_languagerig import WorkspaceCase, epub, pdf
 
@@ -115,6 +116,26 @@ class DoctorTests(WorkspaceCase):
                          "--report", str(report)])
         self.assertEqual(code, 1)
         self.assertEqual(read_json(report)["status"], "blocked")
+
+
+class FitProbeTests(WorkspaceCase):
+    def test_plan_mode_never_loads_model_or_trains(self):
+        config = self.config()
+        result = fit_probe(config)
+        self.assertEqual(result["status"], "planned")
+        self.assertEqual(result["model_fit"], "not_measured")
+        self.assertFalse(result["training_executed"])
+        self.assertFalse(result["adapter_saved"])
+        self.assertFalse(result["model_downloaded"])
+
+    def test_cli_plan_mode_is_safe_without_training_dependencies(self):
+        config = self.config()
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            code = main(["fit-probe", str(config)])
+        self.assertEqual(code, 0)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result["status"], "planned")
+        self.assertFalse(result["training_executed"])
 
 
 class PilotTests(WorkspaceCase):
@@ -227,6 +248,15 @@ else:
         self.assertEqual(completed.returncode, 7)
         self.assertEqual(len(rows), 1)
 
+    def test_fit_mode_runs_doctor_then_bounded_probe(self):
+        completed, rows = self.run_launcher("fit")
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(len(rows), 2)
+        self.assertIn("doctor", rows[0]["args"])
+        self.assertIn("fit-probe", rows[1]["args"])
+        self.assertIn("--execute", rows[1]["args"])
+        self.assertEqual(rows[1]["gpu"], "1")
+
     def test_execute_and_resume_preserve_argument_boundaries(self):
         resume = str(self.root / "checkpoint ' $ ; 20")
         completed, rows = self.run_launcher("execute", resume=resume)
@@ -236,7 +266,7 @@ else:
         self.assertEqual(rows[1]["args"][-2:], ["--resume", resume])
 
     def test_multiple_gpus_and_resume_check_fail_before_python(self):
-        for options in ({"gpu": "0,1"}, {"resume": "checkpoint"}):
+        for options in ({"gpu": "0,1"}, {"resume": "checkpoint"}, {"mode": "fit", "resume": "checkpoint"}):
             completed, rows = self.run_launcher(**options)
             self.assertEqual(completed.returncode, 2)
             self.assertEqual(rows, [])
