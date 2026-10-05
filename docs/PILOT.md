@@ -87,7 +87,9 @@ max_seq_length, gemmer peak allocated/reserved VRAM i checks/fit-probe.json
 og gemmer ingen adapter. En bestået probe viser kun, at denne ene mikrostep
 passer; den beviser ikke langtidstabilitet eller bedre dansk modelkvalitet.
 
-Når både miljøtjek og fit-probe er bestået, kan træning startes eksplicit:
+Når både miljøtjek og fit-probe er bestået og rapporten har
+training_gate=pass, kan træning startes eksplicit. Launcher og CLI kontrollerer,
+at rapportens config- og datasæthash matcher den aktuelle træningsplan:
 
 ~~~powershell
 .\scripts\train-pilot.ps1 -Config '.\data\pilots\dansk-pilot\configs\dansk-pilot.json' -Gpu 0 -Execute
@@ -112,6 +114,7 @@ cachegenbrug spores ikke i træningskørslen.
 ~~~bash
 languagerig doctor --gpu 0 --require-training --report data/checks/doctor.json
 CUDA_VISIBLE_DEVICES=0 languagerig fit-probe data/configs/pilot-v2.json --execute --report data/checks/fit-probe.json
+CUDA_VISIBLE_DEVICES=0 languagerig train data/configs/pilot-v2.json --execute --fit-report data/checks/fit-probe.json
 languagerig --workspace data prepare-pilot /path/to/books --name pilot-v2 --training-allowed
 ~~~
 
