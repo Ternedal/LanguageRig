@@ -35,15 +35,15 @@ def fit_probe(config_path: Path, *, execute: bool = False, report: Path | None =
     if not execute:
         return result
 
-    missing = [name for name, available in plan["dependencies"].items() if not available]
-    if missing:
-        raise LanguageRigError("Install languagerig[train]; missing: " + ", ".join(missing))
-    if int(os.getenv("WORLD_SIZE", "1")) != 1:
-        raise LanguageRigError("Fit probe supports one GPU/process only.")
-
-    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-    os.environ["DO_NOT_TRACK"] = "1"
     try:
+        missing = [name for name, available in plan["dependencies"].items() if not available]
+        if missing:
+            raise LanguageRigError("Install languagerig[train]; missing: " + ", ".join(missing))
+        if int(os.getenv("WORLD_SIZE", "1")) != 1:
+            raise LanguageRigError("Fit probe supports one GPU/process only.")
+
+        os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+        os.environ["DO_NOT_TRACK"] = "1"
         import torch
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
         from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
