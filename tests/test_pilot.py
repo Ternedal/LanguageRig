@@ -199,6 +199,8 @@ class RuntimeGateTests(unittest.TestCase):
     def report(self):
         return {
             "gpu": "NVIDIA GeForce RTX 3060",
+            "gpu_compute_capability": "8.6",
+            "gpu_total_memory_bytes": 12884901888,
             "runtime_versions": {
                 "torch": "2.14.0+cu130",
                 "transformers": "5.0.0",
@@ -211,17 +213,28 @@ class RuntimeGateTests(unittest.TestCase):
 
     def test_runtime_gate_accepts_exact_environment(self):
         report = self.report()
-        verify_fit_runtime(report, report["gpu"], dict(report["runtime_versions"]))
+        verify_fit_runtime(report, report["gpu"], report["gpu_compute_capability"],
+                           report["gpu_total_memory_bytes"], dict(report["runtime_versions"]))
 
     def test_runtime_gate_rejects_gpu_or_package_drift(self):
         report = self.report()
         with self.assertRaises(LanguageRigError):
             verify_fit_runtime(report, "NVIDIA GeForce RTX 4090",
+                               report["gpu_compute_capability"],
+                               report["gpu_total_memory_bytes"],
                                dict(report["runtime_versions"]))
         changed = dict(report["runtime_versions"])
         changed["bitsandbytes"] = "0.46.0"
         with self.assertRaises(LanguageRigError):
-            verify_fit_runtime(report, report["gpu"], changed)
+            verify_fit_runtime(report, report["gpu"], report["gpu_compute_capability"],
+                               report["gpu_total_memory_bytes"], changed)
+        with self.assertRaises(LanguageRigError):
+            verify_fit_runtime(report, report["gpu"], "8.9",
+                               report["gpu_total_memory_bytes"], dict(report["runtime_versions"]))
+        with self.assertRaises(LanguageRigError):
+            verify_fit_runtime(report, report["gpu"], report["gpu_compute_capability"],
+                               report["gpu_total_memory_bytes"] - 1024,
+                               dict(report["runtime_versions"]))
 
 
 class PilotTests(WorkspaceCase):
