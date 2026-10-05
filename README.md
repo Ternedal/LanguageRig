@@ -126,7 +126,9 @@ languagerig train examples/munin-pilot.json --execute --fit-report data/checks/f
 Runneren bruger én synlig GPU, 4-bit NF4, LoRA på lineære lag, batch=1,
 gradient accumulation og gradient checkpointing. En eksekverende træningskørsel
 kræver en bestået fit-probe med samme config- og datasæthash; en gammel eller
-mismatchet rapport afvises. To 12 GB-kort samles ikke
+mismatchet rapport afvises. Fit-proben låser desuden den konkrete Hugging Face-
+commit, og træningen bruger præcis denne resolved revision, selv hvis et tag som
+main flytter sig mellem probe og træningsstart. To 12 GB-kort samles ikke
 automatisk til én 24 GB-pulje. Stop øvrige modeller på det valgte kort og mål
 VRAM/ydelse med et kort pilotjob. En mindre kompatibel dansk/multilingual model
 kan vælges i konfigurationen, hvis kandidaten ikke passer.
