@@ -152,3 +152,15 @@ CI tester Python-forløbet på Windows/Linux, det rigtige forberedelsesscript p�
 Windows og WSL-argumenttransport med en kontrolleret stub. Bash-startens
 stop/fit/execute/resume-forløb testes på Linux. Der køres ingen rigtige CUDA-job
 eller WSL-distributioner i CI. Afprøvning på riggen mangler stadig.
+
+
+## Pilotens integrations- og evidensstatus (2026-10-23)
+
+Dette pilotforløb er en installations- og testvejledning, **ikke** dokumentation for, at GPU-træning eller dansk modelkvalitet er accepteret på målriggen. De eksisterende kommandoer ovenfor er ikke genverificeret i denne dokumentationsændring.
+
+- Gem den eksakte LanguageRig-commit, Python/WSL/CUDA-version og valgte grundmodel i pilotrapporten.
+- Dokumentér rettigheder og tilladt træningsbrug for hver importeret EPUB/PDF; behold bogfiler og rå tekst uden for Git.
+- Kontroller værkbaseret datasætopdeling, træningslog, resume og evalueringsresultater før modelregistrering.
+- Skeln mellem syntetiske pipeline-tests og reel dansk kvalitet på hold-out-materiale.
+- Registrering i Ollama og aktivering i ModelRig er separate godkendelsestrin; bevar en rollback-model.
+- Se [integrationens acceptkrav](INTEGRATION_ACCEPTANCE_2026-10-23.md) og [økosystemkortet](KALIV_ECOSYSTEM.md).
