@@ -361,7 +361,9 @@ def service(*, fail_post=None, drift=False):
             else:
                 self.send({"chunks": 1})
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # serve_forever's default poll_interval (0.5 s) makes every shutdown() wait
+    # out one poll: ~0.5 s per fixture, 7 fixtures -> ~3.5 s of the ~5 s suite.
+    thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=0.01), daemon=True)
     thread.start()
     try:
         yield f"http://127.0.0.1:{server.server_port}", calls
