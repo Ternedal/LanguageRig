@@ -35,13 +35,15 @@ datasæt og brug dets eksisterende konfiguration.
 
 En eksisterende Python-installation kan vælges med -Python, en anden
 projektmappe med -WorkspaceRoot og en kortere pilot med -MaxSteps.
+-Genre (unknown/fiction/nonfiction) og -Topic (kan gentages) videregives til
+importen.
 
 ## Installér WSL-miljøet én gang
 
-Åbn Ubuntu-22.04, og gå til samme checkout gennem WSL-stien, eksempelvis:
-
 LanguageRig kræver Python 3.10 eller nyere. Kontrollér python3 --version;
 brug en passende Python-installation til venv'en.
+
+Åbn Ubuntu-22.04, og gå til samme checkout gennem WSL-stien, eksempelvis:
 
 ~~~bash
 cd /mnt/c/Users/admin/Desktop/LanguageRig
@@ -65,7 +67,7 @@ Windows-venv'en kan ikke bruges som Linux-venv.
 Til den første rigtige rig-kørsel er den anbefalede indgang:
 
 ~~~powershell
-.\\scripts\\check-pilot-ready.ps1 -Config '.\\data\\pilots\\dansk-pilot\\configs\\dansk-pilot.json' -Gpu 0
+.\scripts\check-pilot-ready.ps1 -Config '.\data\pilots\dansk-pilot\configs\dansk-pilot.json' -Gpu 0
 ~~~
 
 Scriptet kører først miljøtjek og derefter den rigtige model-fit-probe. Kun hvis
@@ -74,7 +76,8 @@ capability, total VRAM, laveste observerede frie VRAM-margin, modelrevision og
 sekvenslængde. Samme resumé gemmes som checks/readiness.json med SHA-256 af
 doctor- og fit-probe-rapporterne, så readiness-beslutningen kan auditeres.
 Scriptet udskriver også den præcise PowerShell-kommando til næste trin med den
-samme config og GPU. Det starter ikke fuld træning.
+samme config og GPU. Det starter ikke fuld træning. Ligesom train-pilot.ps1
+accepterer det -Distribution og -WslPython.
 
 ## Miljøtjek og træning
 
@@ -133,20 +136,39 @@ cachegenbrug spores ikke i træningskørslen.
 
 ## Direkte CLI og afprøvning
 
+Forberedelse, miljøtjek og fit-probe kan køres direkte i WSL:
+
 ~~~bash
-languagerig doctor --gpu 0 --require-training --report data/checks/doctor.json
+languagerig --workspace data prepare-pilot /path/to/books --name pilot-v2 --training-allowed
+languagerig doctor --gpu 0 --require-training --config data/configs/pilot-v2.json --report data/checks/train-doctor.json
 CUDA_VISIBLE_DEVICES=0 languagerig fit-probe data/configs/pilot-v2.json --execute --report data/checks/fit-probe.json
+~~~
+
+Readiness-kvitteringen kan ikke dannes med CLI'en. Kør derfor fra PowerShell
+i repoets rod; scriptet kører doctor og fit-probe igen og skriver
+data\checks\readiness.json:
+
+~~~powershell
+.\scripts\check-pilot-ready.ps1 -Config '.\data\configs\pilot-v2.json' -Gpu 0
+~~~
+
+Start derefter træningen i WSL:
+
+~~~bash
 CUDA_VISIBLE_DEVICES=0 languagerig train data/configs/pilot-v2.json --execute \
   --fit-report data/checks/fit-probe.json \
   --readiness-report data/checks/readiness.json \
   --doctor-report data/checks/train-doctor.json
-languagerig --workspace data prepare-pilot /path/to/books --name pilot-v2 --training-allowed
 ~~~
 
 Direkte prepare-pilot bruger alle træningsegnede bøger i det valgte workspace.
+CLI'ens prepare-pilot accepterer også --language, --genre, --topic, --model,
+--revision (standard main) og --max-steps.
 doctor --gpu påvirker kun miljøtjekkets underproces. Ved direkte train skal
 CUDA_VISIBLE_DEVICES sættes for træningsprocessen som vist i README, og en
 gyldig readiness-kvittering samt de rapporter, den hasher, skal angives.
+Kvitteringen dannes kun af scripts/check-pilot-ready.ps1 (fra PowerShell); der
+findes ingen CLI-kommando til den.
 
 CI tester Python-forløbet på Windows/Linux, det rigtige forberedelsesscript på
 Windows og WSL-argumenttransport med en kontrolleret stub. Bash-startens
