@@ -127,8 +127,14 @@ def doctor(workspace: Path, *, config: Path | None = None, gpu: int | None = Non
            require_training=False, report: Path | None = None) -> dict:
     if gpu is not None and (type(gpu) is not int or gpu < 0):
         raise LanguageRigError("GPU index must be a nonnegative integer.")
-    dependencies = dependency_status()
     base_errors, blockers = [], []
+    try:
+        dependencies = dependency_status()
+    except importlib.metadata.PackageNotFoundError:
+        # Run from a source tree without `pip install`: there is no distribution
+        # metadata to read requirements from. Report it instead of crashing.
+        dependencies = []
+        base_errors.append("languagerig_not_installed")
     if sys.version_info < (3, 10):
         base_errors.append("python_below_3_10")
     for row in dependencies:
