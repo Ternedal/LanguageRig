@@ -8,7 +8,7 @@ sit eksisterende RAG-index til chat og dokumentopslag.
 | Forløb | LanguageRig | Eksisterende grænseflade |
 | --- | --- | --- |
 | Trænet model | Merge, operatørkonverteret GGUF og lokal registrering | Ollama create og /api/tags; ModelRigs modelvælger |
-| Bogopslag | Kapitel-/sidebaseret eksport og publish-rag | POST /api/v1/rag/ingest med documents, chunk_size og chunk_overlap |
+| Bogopslag | Kapitel-/sidebaseret eksport og publish-rag | POST /api/v1/rag/ingest med documents, chunk_size og overlap |
 | Direkte modelsammenligning | Baseline/kandidat, modeldigests og HTML | Lokal Ollama /api/tags og /api/chat |
 
 ## Samme Ollama-instans
@@ -26,6 +26,9 @@ export MODELRIG_OLLAMA_URL=http://127.0.0.1:11435
 ~~~
 
 Ved brug fra WSL skal den valgte lokale Ollama-adresse kunne nås fra WSL.
+register-model og evaluate accepterer kun loopback (localhost eller en
+loopback-IP som 127.0.0.1), og register-model kalder Ollama-CLI'en
+(ollama create), som derfor skal være på PATH i samme miljø.
 En vellykket registrering gør kandidatnavnet tilgængeligt via Ollamas modeloversigt.
 ModelRig skifter ikke standardmodel automatisk. Se [README](../README.md) for
 merge, GGUF-konvertering, pakning og registrering.
