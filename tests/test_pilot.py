@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.metadata
 import io
 import json
 import os
@@ -46,6 +47,20 @@ class DoctorTests(WorkspaceCase):
         self.assertTrue(result[1]["compatible"])
         self.assertFalse(result[2]["compatible"])
         self.assertEqual(result[2]["scope"], "training")
+
+    def test_source_tree_without_installation_is_reported_not_raised(self):
+        missing = importlib.metadata.PackageNotFoundError("languagerig")
+        report = self.root / "checks" / "doctor.json"
+        with patch("languagerig.doctor.dependency_status", side_effect=missing), \
+                patch("languagerig.doctor.gpu_probe") as probe:
+            result = doctor(self.root / "workspace", require_training=True, report=report)
+        probe.assert_not_called()
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("languagerig_not_installed", result["errors"])
+        self.assertEqual(result["dependencies"], [])
+        self.assertEqual(result["gpu_probe"]["status"], "not_run")
+        self.assertFalse(result["training_environment_ready"])
+        self.assertEqual(read_json(report)["errors"], result["errors"])
 
     def test_missing_gpu_dependencies_are_recorded_without_probe(self):
         missing = compatible_dependencies()
